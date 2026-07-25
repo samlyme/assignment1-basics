@@ -2,6 +2,7 @@ from abc import ABC
 import argparse
 from collections import defaultdict
 from dataclasses import dataclass
+import os
 
 import regex
 
@@ -60,6 +61,8 @@ def merge_counts(pretoken_counts: PretokenCounts, pair: tuple[bytes, bytes]) -> 
     to_delete = set()
     to_add = {}
     for token, count in pretoken_counts.items():
+        if len(token) < 2:
+            continue
         if pair in zip(token[:-1], token[1:]):
             to_delete.add(token)
             to_add[merge_token(token, pair)] = count
@@ -71,20 +74,18 @@ def merge_counts(pretoken_counts: PretokenCounts, pair: tuple[bytes, bytes]) -> 
         pretoken_counts[k] = v
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Read a file as raw bytes.")
-    parser.add_argument(
-        "file",
-        type=str,
-        help="Path to the file to read",
-    )
-    parser.add_argument("--merges", "-m", type=int, default=4, help="Number of merges")
-    args = parser.parse_args()
+def train_bpe(
+    input_path: str | os.PathLike,
+    vocab_size: int,
+    special_tokens: list[str],
+) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
+    vocab: dict[int, bytes] = {}
+    merges: list[tuple[bytes, bytes]] = []
 
-    with open(args.file, "rb") as file:
+    with open(input_path, "rb") as file:
         raw = file.read().decode("utf-8", errors="ignore")
 
-        escaped = "".join(regex.split("|".join(["<|endoftext|>"]), raw))
+        escaped = "".join(regex.split("|".join(special_tokens), raw))
 
         vocab: dict[int, bytes] = {i: bytes(i) for i in range(256)}
 
@@ -94,17 +95,36 @@ def main():
         for pretoken in pretokens:
             pretoken_counts[tuple(map(lambda x: x.encode("utf-8"), pretoken.group()))] += 1
 
-        for i in range(args.merges):
+        while len(vocab) < vocab_size - len(special_tokens):
             pair_counts = get_stats(pretoken_counts)
             to_merge = max(pair_counts.items(), key=lambda x: (x[1], x[0]))[0]
+            merges.append(to_merge)
             merge_counts(pretoken_counts, to_merge)
-            print("merged:", to_merge)
-            print(pretoken_counts)
             vocab[len(vocab)] = to_merge[0] + to_merge[1]
 
-        print("\nFinal vocab:")
-        for i in range(args.merges):
-            print(vocab[257 + i])
+        for special_token in special_tokens:
+            vocab[len(vocab)] = special_token.encode("utf-8")
+
+    return vocab, merges
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Read a file as raw bytes.")
+    parser.add_argument(
+        "file",
+        type=str,
+        help="Path to the file to read",
+    )
+    parser.add_argument("--vocab-size", type=int, default=512, help="Final vocab size")
+    args = parser.parse_args()
+
+    vocab, merges = train_bpe(args.file, args.vocab_size, ["<|endoftext|>"])
+
+    print("\nFinal vocab:")
+    for i in range(256, 260):
+        print(vocab[i])
+
+    print("merges:", merges)
 
 
 if __name__ == "__main__":
