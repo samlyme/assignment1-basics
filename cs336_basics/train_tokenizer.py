@@ -34,26 +34,34 @@ PretokenCounts = dict[tuple[bytes, ...], int]
 PairCounts = dict[tuple[bytes, bytes], int]
 
 
-def get_stats(pretoken_counts: PretokenCounts) -> PairCounts:
+def get_stats(pretoken_counts: PretokenCounts) -> PairCounts | None:
     out = defaultdict(int)
     for pretoken, count in pretoken_counts.items():
+        if len(pretoken) < 2:
+            continue
+
         for a, b in zip(pretoken[:-1], pretoken[1:]):
             out[(a, b)] += count
-    return out
+    return out if out else None
 
 
 def merge_token(tokens: tuple[bytes, ...], pair: tuple[bytes, bytes]) -> tuple[bytes, ...]:
+    assert len(tokens) >= 2
+
     out = []
-    flag = False
-    for a, b in zip(tokens[:-1], tokens[1:]):
+    i = 0
+    while i < len(tokens) - 1:
+        a, b = tokens[i], tokens[i + 1]
         if (a, b) == pair:
             out.append(a + b)
-            flag = False
+            i += 2
         else:
             out.append(a)
-            flag = True
-    if flag:
-        out.append(tokens[-1])
+            i += 1
+
+    if i < len(tokens):
+        out.append(tokens[i])
+
     return tuple(out)
 
 
@@ -63,6 +71,7 @@ def merge_counts(pretoken_counts: PretokenCounts, pair: tuple[bytes, bytes]) -> 
     for token, count in pretoken_counts.items():
         if len(token) < 2:
             continue
+
         if pair in zip(token[:-1], token[1:]):
             to_delete.add(token)
             to_add[merge_token(token, pair)] = count
@@ -87,7 +96,12 @@ def train_bpe(
 
         escaped = "".join(regex.split("|".join(special_tokens), raw))
 
-        vocab: dict[int, bytes] = {i: bytes(i) for i in range(256)}
+        vocab: dict[int, bytes] = {}
+
+        for i in range(256):
+            vocab[len(vocab)] = bytes(i)
+
+        assert len(vocab) < vocab_size
 
         pretoken_counts: PretokenCounts = defaultdict(int)
         pretokens = split_pretokens(escaped)
@@ -97,6 +111,8 @@ def train_bpe(
 
         while len(vocab) < vocab_size - len(special_tokens):
             pair_counts = get_stats(pretoken_counts)
+            if pair_counts is None:
+                break
             to_merge = max(pair_counts.items(), key=lambda x: (x[1], x[0]))[0]
             merges.append(to_merge)
             merge_counts(pretoken_counts, to_merge)
@@ -104,8 +120,18 @@ def train_bpe(
 
         for special_token in special_tokens:
             vocab[len(vocab)] = special_token.encode("utf-8")
-
     return vocab, merges
+
+
+def print_counts(counts: PretokenCounts):
+    print("{", end="\n")
+    for k, v in counts.items():
+        print(" ".join(map(lambda x: x.decode(), k)), ":", v)
+    print("}", end="\n")
+
+
+def render_merges(merges: list[tuple[bytes, bytes]]):
+    print(list(map(lambda x: x[0].decode() + " " + x[1].decode(), merges)))
 
 
 def main():
@@ -115,7 +141,7 @@ def main():
         type=str,
         help="Path to the file to read",
     )
-    parser.add_argument("--vocab-size", type=int, default=512, help="Final vocab size")
+    parser.add_argument("--vocab-size", type=int, default=256 + 17, help="Final vocab size")
     args = parser.parse_args()
 
     vocab, merges = train_bpe(args.file, args.vocab_size, ["<|endoftext|>"])
