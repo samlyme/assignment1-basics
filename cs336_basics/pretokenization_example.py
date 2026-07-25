@@ -51,12 +51,22 @@ def find_chunk_boundaries(
     return sorted(set(chunk_boundaries))
 
 
-def pretokenize(text: str) -> dict[tuple[bytes, ...], int]:
+TokenCount = dict[tuple[bytes, ...], int]
+
+
+def print_token_count(count: TokenCount):
+    print("{")
+    for k, v in count.items():
+        print(b"".join(k), ": ", v, ", ")
+    print("}")
+
+
+def pretokenize(text: str) -> TokenCount:
 
     PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
     matches = regex.finditer(PAT, text)
 
-    out: dict[tuple[bytes, ...], int] = {}
+    out: TokenCount = {}
 
     for m in matches:
         s = m.group()
@@ -80,7 +90,7 @@ with open("data/toy.txt", "rb") as f:
 
     print("num chunks: ", len(boundaries))
 
-    counts: dict[tuple[bytes, ...], int] = defaultdict(int)
+    counts: TokenCount = defaultdict(int)
 
     # The following is a serial implementation, but you can parallelize this
     # by sending each start/end pair to a set of processes.
@@ -92,4 +102,4 @@ with open("data/toy.txt", "rb") as f:
         for k, v in counts_local.items():
             counts[k] += v
 
-    print(counts)
+    print_token_count(counts)
