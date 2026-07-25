@@ -1,4 +1,6 @@
+from collections import defaultdict
 import os
+import regex
 from typing import BinaryIO
 
 
@@ -49,10 +51,36 @@ def find_chunk_boundaries(
     return sorted(set(chunk_boundaries))
 
 
+def pretokenize(text: str) -> dict[tuple[bytes, ...], int]:
+
+    PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
+    matches = regex.finditer(PAT, text)
+
+    out: dict[tuple[bytes, ...], int] = {}
+
+    for m in matches:
+        s = m.group()
+
+        if s in ("<|", "endoftext", "|>"):
+            # weird assumption for EOT token. i just will ignore it for now??
+            continue
+
+        b = tuple(map(lambda x: x.encode("utf-8"), s))
+        if b not in out:
+            out[b] = 0
+        out[b] += 1
+
+    return out
+
+
 ## Usage
-with open(..., "rb") as f:
-    num_processes = 4
+with open("data/toy.txt", "rb") as f:
+    num_processes = 1
     boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
+
+    print("num chunks: ", len(boundaries))
+
+    counts: dict[tuple[bytes, ...], int] = defaultdict(int)
 
     # The following is a serial implementation, but you can parallelize this
     # by sending each start/end pair to a set of processes.
@@ -60,3 +88,8 @@ with open(..., "rb") as f:
         f.seek(start)
         chunk = f.read(end - start).decode("utf-8", errors="ignore")
         # Run pre-tokenization on your chunk and store the counts for each pre-token
+        counts_local = pretokenize(chunk)
+        for k, v in counts_local.items():
+            counts[k] += v
+
+    print(counts)
