@@ -104,7 +104,7 @@ def train_bpe(
         pretokens = split_pretokens(escaped)
 
         for pretoken in pretokens:
-            pretoken_counts[tuple(map(lambda x: x.encode("utf-8"), pretoken.group()))] += 1
+            pretoken_counts[tuple(bytes([value]) for value in pretoken.group().encode("utf-8", errors="ignore"))] += 1
 
         while len(vocab) < vocab_size - len(special_tokens):
             pair_counts = get_stats(pretoken_counts)
@@ -142,12 +142,6 @@ def main():
     args = parser.parse_args()
 
     vocab, merges = train_bpe(args.file, args.vocab_size, ["<|endoftext|>"])
-
-    print("\nFinal vocab:")
-    for i in range(256, 260):
-        print(vocab[i])
-
-    print("merges:", merges)
 
 
 if __name__ == "__main__":
