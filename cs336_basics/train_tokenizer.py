@@ -43,6 +43,36 @@ def get_stats(pretoken_counts: PretokenCounts) -> PairCounts:
     return out
 
 
+def merge_token(tokens: tuple[bytes, ...], pair: tuple[bytes, bytes]) -> tuple[bytes, ...]:
+    out = []
+    flag = False
+    for a, b in zip(tokens[:-1], tokens[1:]):
+        if (a, b) == pair:
+            out.append(a + b)
+            flag = False
+        else:
+            out.append(a)
+            flag = True
+    if flag:
+        out.append(tokens[-1])
+    return tuple(out)
+
+
+def merge_counts(pretoken_counts: PretokenCounts, pair: tuple[bytes, bytes]) -> None:
+    to_delete = set()
+    to_add = {}
+    for token, count in pretoken_counts.items():
+        if pair in zip(token[:-1], token[1:]):
+            to_delete.add(token)
+            to_add[merge_token(token, pair)] = count
+
+    for delete in to_delete:
+        del pretoken_counts[delete]
+
+    for k, v in to_add.items():
+        pretoken_counts[k] = v
+
+
 def main():
     parser = argparse.ArgumentParser(description="Read a file as raw bytes.")
     parser.add_argument(
@@ -66,9 +96,17 @@ def main():
         for pretoken in pretokens:
             pretoken_counts[tuple(map(lambda x: x.encode("utf-8"), pretoken.group()))] += 1
 
-        pair_counts = get_stats(pretoken_counts)
-        to_merge = max(pair_counts.items(), key=lambda x: (x[1], x[0]))
-        print(to_merge)
+        for i in range(args.merges):
+            pair_counts = get_stats(pretoken_counts)
+            to_merge = max(pair_counts.items(), key=lambda x: (x[1], x[0]))[0]
+            merge_counts(pretoken_counts, to_merge)
+            print("merged:", to_merge)
+            print(pretoken_counts)
+            vocab[len(vocab)] = to_merge[0] + to_merge[1]
+
+        print("\nFinal vocab:")
+        for i in range(args.merges):
+            print(vocab[257 + i])
 
 
 if __name__ == "__main__":
