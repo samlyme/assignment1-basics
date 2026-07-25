@@ -25,9 +25,10 @@ class BPETokenizerParams:
     merges: dict[tuple[int, int], int]  # index1,index2 -> new_index
 
 
-def split_pretokens(text: str):
+def split_pretokens(text: list[str]):
     PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
-    return regex.finditer(PAT, text)
+    for str in text:
+        yield from regex.finditer(PAT, str)
 
 
 PretokenCounts = dict[tuple[bytes, ...], int]
@@ -94,13 +95,12 @@ def train_bpe(
     with open(input_path, "rb") as file:
         raw = file.read().decode("utf-8", errors="ignore")
 
-        escaped = "".join(regex.split("|".join(special_tokens), raw))
-
         vocab: dict[int, bytes] = {x: bytes([x]) for x in range(256)}
 
         assert len(vocab) < vocab_size
 
         pretoken_counts: PretokenCounts = defaultdict(int)
+        escaped = regex.split("|".join(map(regex.escape, special_tokens)), raw)
         pretokens = split_pretokens(escaped)
 
         for pretoken in pretokens:
