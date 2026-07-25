@@ -96,10 +96,7 @@ def train_bpe(
 
         escaped = "".join(regex.split("|".join(special_tokens), raw))
 
-        vocab: dict[int, bytes] = {}
-
-        for i in range(256):
-            vocab[len(vocab)] = bytes(i)
+        vocab: dict[int, bytes] = {x: bytes([x]) for x in range(256)}
 
         assert len(vocab) < vocab_size
 
