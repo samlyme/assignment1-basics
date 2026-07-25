@@ -1,9 +1,7 @@
 from abc import ABC
 import argparse
-from collections import Counter, defaultdict
+from collections import defaultdict
 from dataclasses import dataclass
-import os
-from typing import BinaryIO
 
 import regex
 
@@ -84,15 +82,15 @@ def main():
     args = parser.parse_args()
 
     with open(args.file, "rb") as file:
-        chunk = file.read().decode("utf-8", errors="ignore")
-        # this is the most naive possible solution
-        vocab: dict[int, bytes] = {}
-        vocab[0] = b"<|endoftext|>"
-        for i in range(256):
-            vocab[i + 1] = bytes(i)  # icky, but makes more sense IMO.
+        raw = file.read().decode("utf-8", errors="ignore")
+
+        escaped = "".join(regex.split("|".join(["<|endoftext|>"]), raw))
+
+        vocab: dict[int, bytes] = {i: bytes(i) for i in range(256)}
 
         pretoken_counts: PretokenCounts = defaultdict(int)
-        pretokens = split_pretokens(chunk)
+        pretokens = split_pretokens(escaped)
+
         for pretoken in pretokens:
             pretoken_counts[tuple(map(lambda x: x.encode("utf-8"), pretoken.group()))] += 1
 
