@@ -1,7 +1,10 @@
 from abc import ABC
 import argparse
 from collections import defaultdict
+from dataclasses import dataclass
+from datetime import date, datetime
 import os
+import pickle
 
 import regex
 
@@ -122,17 +125,36 @@ def render_merges(merges: list[tuple[bytes, bytes]]):
     print(list(map(lambda x: x[0].decode() + " " + x[1].decode(), merges)))
 
 
+@dataclass(frozen=True)
+class BPEParams:
+    vocab: dict[int, bytes]
+    merges: list[tuple[bytes, bytes]]
+
+
 def main():
     parser = argparse.ArgumentParser(description="Read a file as raw bytes.")
     parser.add_argument(
-        "file",
+        "input_path",
         type=str,
         help="Path to the file to read",
     )
     parser.add_argument("--vocab-size", type=int, default=256 + 17, help="Final vocab size")
+    parser.add_argument(
+        "--output-path",
+        "-o",
+        type=str,
+        help="Where to output trained params.",
+    )
     args = parser.parse_args()
 
-    vocab, merges = train_bpe(args.file, args.vocab_size, ["<|endoftext|>"])
+    if not args.output_path:
+        args.output_path = f"out/bpe_params_{datetime.now().strftime('%Y%m%d-%H%M%S')}.pkl"
+
+    vocab, merges = train_bpe(args.input_path, args.vocab_size, ["<|endoftext|>"])
+
+    params = BPEParams(vocab, merges)
+    with open(args.output_path, "wb") as out:
+        pickle.dump(params, out)
 
 
 if __name__ == "__main__":
