@@ -143,12 +143,10 @@ def main():
         "--output-path",
         "-o",
         type=str,
+        default=f"out/bpe_params_{datetime.now().strftime('%Y%m%d-%H%M%S')}.pkl",
         help="Where to output trained params.",
     )
     args = parser.parse_args()
-
-    if not args.output_path:
-        args.output_path = f"out/bpe_params_{datetime.now().strftime('%Y%m%d-%H%M%S')}.pkl"
 
     vocab, merges = train_bpe(args.input_path, args.vocab_size, ["<|endoftext|>"])
 
