@@ -5,8 +5,11 @@ from dataclasses import dataclass
 from datetime import datetime
 import os
 import pickle
+from collections.abc import Iterable
 
 import regex
+
+from cs336_basics.utils import format_columns
 
 
 class Tokenizer(ABC):
@@ -19,14 +22,17 @@ class Tokenizer(ABC):
         raise NotImplementedError
 
 
-def split_pretokens(text: list[str]):
+def split_pretokens(text: Iterable[str]):
     PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
     for str in text:
         yield from regex.finditer(PAT, str)
 
 
-PretokenCounts = dict[tuple[bytes, ...], int]
-PairCounts = dict[tuple[bytes, bytes], int]
+type TokenId = int
+TokenPair = tuple[TokenId, TokenId]
+Word = tuple[TokenId, ...]
+PretokenCounts = dict[Word, int]
+PairCounts = dict[tuple[TokenId, TokenId], int]
 
 
 def get_stats(pretoken_counts: PretokenCounts) -> PairCounts | None:
@@ -40,10 +46,10 @@ def get_stats(pretoken_counts: PretokenCounts) -> PairCounts | None:
     return out if out else None
 
 
-def merge_token(tokens: tuple[bytes, ...], pair: tuple[bytes, bytes]) -> tuple[bytes, ...]:
+def merge_token(tokens: Word, pair: TokenPair) -> Word:
     assert len(tokens) >= 2
 
-    out = []
+    out: list[TokenId] = []
     i = 0
     while i < len(tokens) - 1:
         a, b = tokens[i], tokens[i + 1]
@@ -60,7 +66,7 @@ def merge_token(tokens: tuple[bytes, ...], pair: tuple[bytes, bytes]) -> tuple[b
     return tuple(out)
 
 
-def merge_counts(pretoken_counts: PretokenCounts, pair: tuple[bytes, bytes]) -> None:
+def merge_counts(pretoken_counts: PretokenCounts, pair: TokenPair) -> None:
     to_delete = set()
     to_add = {}
     for token, count in pretoken_counts.items():
@@ -78,6 +84,8 @@ def merge_counts(pretoken_counts: PretokenCounts, pair: tuple[bytes, bytes]) -> 
         pretoken_counts[k] = v
 
 
+# TODO: make this use ID's internally. Then use a global delta-based approach
+# for the pair counts.
 def train_bpe(
     input_path: str | os.PathLike,
     vocab_size: int,
@@ -91,38 +99,30 @@ def train_bpe(
 
         vocab: dict[int, bytes] = {x: bytes([x]) for x in range(256)}
 
+        assert all(bytes([k]) == v for k, v in vocab.items())
+
         assert len(vocab) < vocab_size
 
         pretoken_counts: PretokenCounts = defaultdict(int)
-        escaped = regex.split("|".join(map(regex.escape, special_tokens)), raw)
-        pretokens = split_pretokens(escaped)
+        docs = regex.splititer("|".join(map(regex.escape, special_tokens)), raw)
+        pretokens = split_pretokens(docs)
 
         for pretoken in pretokens:
-            pretoken_counts[tuple(bytes([value]) for value in pretoken.group().encode("utf-8", errors="ignore"))] += 1
+            word = tuple(map(int, pretoken.group().encode("utf-8", errors="ignore")))
+            pretoken_counts[word] += 1
 
         while len(vocab) < vocab_size - len(special_tokens):
             pair_counts = get_stats(pretoken_counts)
             if pair_counts is None:
                 break
-            to_merge = max(pair_counts.items(), key=lambda x: (x[1], x[0]))[0]
-            merges.append(to_merge)
+            to_merge = max(pair_counts.items(), key=lambda x: (x[1], (vocab[x[0][0]], vocab[x[0][1]])))[0]
+            vocab[len(vocab)] = vocab[to_merge[0]] + vocab[to_merge[1]]
+            merges.append((vocab[to_merge[0]], vocab[to_merge[1]]))
             merge_counts(pretoken_counts, to_merge)
-            vocab[len(vocab)] = to_merge[0] + to_merge[1]
 
         for special_token in special_tokens:
             vocab[len(vocab)] = special_token.encode("utf-8")
     return vocab, merges
-
-
-def print_counts(counts: PretokenCounts):
-    print("{", end="\n")
-    for k, v in counts.items():
-        print(" ".join(map(lambda x: x.decode(), k)), ":", v)
-    print("}", end="\n")
-
-
-def render_merges(merges: list[tuple[bytes, bytes]]):
-    print(list(map(lambda x: x[0].decode() + " " + x[1].decode(), merges)))
 
 
 @dataclass(frozen=True)
