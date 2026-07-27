@@ -2,7 +2,7 @@ from abc import ABC
 import argparse
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import datetime
 import os
 import pickle
 
