@@ -1,7 +1,6 @@
 from abc import ABC
 import argparse
 from collections import defaultdict
-from dataclasses import dataclass
 import os
 
 import regex
@@ -15,14 +14,6 @@ class Tokenizer(ABC):
 
     def decode(self, indices: list[int]) -> str:
         raise NotImplementedError
-
-
-@dataclass(frozen=True)
-class BPETokenizerParams:
-    """All you need to specify a BPETokenizer."""
-
-    vocab: dict[int, bytes]  # index -> bytes
-    merges: dict[tuple[int, int], int]  # index1,index2 -> new_index
 
 
 def split_pretokens(text: list[str]):
