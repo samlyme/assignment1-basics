@@ -9,8 +9,6 @@ from collections.abc import Iterable
 
 import regex
 
-from cs336_basics.utils import format_columns
-
 
 class Tokenizer(ABC):
     """Abstract interface for a tokenizer."""
@@ -46,7 +44,7 @@ def get_stats(pretoken_counts: PretokenCounts) -> PairCounts | None:
     return out if out else None
 
 
-def merge_token(tokens: Word, pair: TokenPair) -> Word:
+def merge_token(tokens: Word, pair: TokenPair, newTokenId: TokenId) -> Word:
     assert len(tokens) >= 2
 
     out: list[TokenId] = []
@@ -54,7 +52,7 @@ def merge_token(tokens: Word, pair: TokenPair) -> Word:
     while i < len(tokens) - 1:
         a, b = tokens[i], tokens[i + 1]
         if (a, b) == pair:
-            out.append(a + b)
+            out.append(newTokenId)
             i += 2
         else:
             out.append(a)
@@ -66,7 +64,7 @@ def merge_token(tokens: Word, pair: TokenPair) -> Word:
     return tuple(out)
 
 
-def merge_counts(pretoken_counts: PretokenCounts, pair: TokenPair) -> None:
+def merge_counts(pretoken_counts: PretokenCounts, pair: TokenPair, newTokenId: TokenId) -> None:
     to_delete = set()
     to_add = {}
     for token, count in pretoken_counts.items():
@@ -75,7 +73,7 @@ def merge_counts(pretoken_counts: PretokenCounts, pair: TokenPair) -> None:
 
         if pair in zip(token[:-1], token[1:]):
             to_delete.add(token)
-            to_add[merge_token(token, pair)] = count
+            to_add[merge_token(token, pair, newTokenId)] = count
 
     for delete in to_delete:
         del pretoken_counts[delete]
@@ -91,21 +89,17 @@ def train_bpe(
     vocab_size: int,
     special_tokens: list[str],
 ) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
-    vocab: dict[int, bytes] = {}
     merges: list[tuple[bytes, bytes]] = []
+
+    vocab: dict[int, bytes] = {x: bytes([x]) for x in range(256)}
+    assert all(bytes([k]) == v for k, v in vocab.items())
+    assert len(vocab) < vocab_size
 
     with open(input_path, "rb") as file:
         raw = file.read().decode("utf-8", errors="ignore")
-
-        vocab: dict[int, bytes] = {x: bytes([x]) for x in range(256)}
-
-        assert all(bytes([k]) == v for k, v in vocab.items())
-
-        assert len(vocab) < vocab_size
-
-        pretoken_counts: PretokenCounts = defaultdict(int)
         docs = regex.splititer("|".join(map(regex.escape, special_tokens)), raw)
         pretokens = split_pretokens(docs)
+        pretoken_counts: PretokenCounts = defaultdict(int)
 
         for pretoken in pretokens:
             word = tuple(map(int, pretoken.group().encode("utf-8", errors="ignore")))
@@ -116,12 +110,14 @@ def train_bpe(
             if pair_counts is None:
                 break
             to_merge = max(pair_counts.items(), key=lambda x: (x[1], (vocab[x[0][0]], vocab[x[0][1]])))[0]
-            vocab[len(vocab)] = vocab[to_merge[0]] + vocab[to_merge[1]]
+            newTokenId = len(vocab)
+            vocab[newTokenId] = vocab[to_merge[0]] + vocab[to_merge[1]]
             merges.append((vocab[to_merge[0]], vocab[to_merge[1]]))
-            merge_counts(pretoken_counts, to_merge)
+            merge_counts(pretoken_counts, to_merge, newTokenId)
 
         for special_token in special_tokens:
             vocab[len(vocab)] = special_token.encode("utf-8")
+
     return vocab, merges
 
 
