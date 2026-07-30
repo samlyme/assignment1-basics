@@ -1,6 +1,6 @@
 from abc import ABC
 import argparse
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 import os
@@ -27,59 +27,113 @@ def split_pretokens(text: Iterable[str]):
 
 
 type TokenId = int
-TokenPair = tuple[TokenId, TokenId]
+type PretokenId = int
+TokenIdPair = tuple[TokenId, TokenId]
 Word = tuple[TokenId, ...]
-PretokenCounts = dict[Word, int]
+type PretokenIdCounts = Counter[PretokenId]
 PairCounts = dict[tuple[TokenId, TokenId], int]
 
 
-def get_stats(pretoken_counts: PretokenCounts) -> PairCounts | None:
-    out = defaultdict(int)
-    for pretoken, count in pretoken_counts.items():
-        if len(pretoken) < 2:
-            continue
-
-        for a, b in zip(pretoken[:-1], pretoken[1:]):
-            out[(a, b)] += count
-    return out if out else None
+PretokenVocab = dict[PretokenId, Word]
 
 
-def merge_token(tokens: Word, pair: TokenPair, newTokenId: TokenId) -> Word:
-    assert len(tokens) >= 2
+def pretokenize(raw: str, special_tokens: list[str]) -> tuple[PretokenVocab, PretokenIdCounts]:
+    pretoken_vocab = {}
 
+    pretoken_counts = Counter()
+
+    docs = regex.splititer("|".join(map(regex.escape, special_tokens)), raw)
+    pretokens = split_pretokens(docs)
+
+    for pretoken in pretokens:
+        # Can't immediately use pretoken ID's since i want to parallelize later.
+        word = tuple(map(int, pretoken.group().encode("utf-8", errors="ignore")))
+        pretoken_counts[word] += 1
+
+        if word not in pretoken_vocab:
+            pretoken_vocab[len(pretoken_vocab)] = word
+
+    pretoken_id_counts = Counter(
+        {pretoken_id: pretoken_counts[pretoken] for pretoken_id, pretoken in pretoken_vocab.items()}
+    )
+    return pretoken_vocab, pretoken_id_counts
+
+
+type TokenVocab = dict[int, bytes]
+type TokenPairCounts = Counter[TokenIdPair]
+type TokenPairInPretokens = dict[TokenIdPair, Counter[PretokenId]]
+
+
+def init_stats(
+    pretoken_vocab: PretokenVocab, pretoken_id_counts: PretokenIdCounts
+) -> tuple[TokenVocab, TokenPairCounts, TokenPairInPretokens]:
+    token_vocab: dict[int, bytes] = {x: bytes([x]) for x in range(256)}
+    token_pair_counts: TokenPairCounts = Counter()
+    token_pair_in_pretokens: TokenPairInPretokens = defaultdict(Counter)
+
+    for pretoken_id, counts in pretoken_id_counts.items():
+        pretoken_repr = pretoken_vocab[pretoken_id]
+
+        if len(pretoken_repr) >= 2:
+            for pair in zip(pretoken_repr[:-1], pretoken_repr[1:]):
+                token_pair_counts[pair] += counts
+                token_pair_in_pretokens[pair][pretoken_id] += 1
+
+    assert len(token_pair_counts) != 0
+    assert len(token_pair_in_pretokens) != 0
+
+    return token_vocab, token_pair_counts, token_pair_in_pretokens
+
+
+def merge_pair(word: Word, to_merge: TokenIdPair, merged_token_id: TokenId) -> Word:
     out: list[TokenId] = []
     i = 0
-    while i < len(tokens) - 1:
-        a, b = tokens[i], tokens[i + 1]
-        if (a, b) == pair:
-            out.append(newTokenId)
+    while i < len(word) - 1:
+        a, b = word[i], word[i + 1]
+        if (a, b) == to_merge:
+            out.append(merged_token_id)
             i += 2
         else:
             out.append(a)
             i += 1
 
-    if i < len(tokens):
-        out.append(tokens[i])
+    if i < len(word):
+        out.append(word[i])
 
     return tuple(out)
 
 
-def merge_counts(pretoken_counts: PretokenCounts, pair: TokenPair, newTokenId: TokenId) -> None:
-    to_delete = set()
-    to_add = {}
-    for token, count in pretoken_counts.items():
-        if len(token) < 2:
-            continue
+def token_pair_counts_delta(pretoken_repr_old_to_new: dict[PretokenId, tuple[Word, Word]]) -> TokenPairCounts:
+    old = Counter()
+    new = Counter()
 
-        if pair in zip(token[:-1], token[1:]):
-            to_delete.add(token)
-            to_add[merge_token(token, pair, newTokenId)] = count
+    for repr_old, repr_new in pretoken_repr_old_to_new.values():
+        if len(repr_old) >= 2:
+            old.update(pair for pair in zip([repr_old[:-1], repr_old[1:]]))
+        if len(repr_new) >= 2:
+            old.update(pair for pair in zip([repr_new[:-1], repr_new[1:]]))
 
-    for delete in to_delete:
-        del pretoken_counts[delete]
+    new.subtract(old)
+    return new
 
-    for k, v in to_add.items():
-        pretoken_counts[k] = v
+
+def token_pair_in_pretokens_delta(
+    pretoken_repr_old_to_new: dict[PretokenId, tuple[Word, Word]],
+) -> TokenPairInPretokens:
+    old: TokenPairInPretokens = defaultdict(Counter)
+    new: TokenPairInPretokens = defaultdict(Counter)
+
+    for pretoken_id, (repr_old, repr_new) in pretoken_repr_old_to_new.items():
+        if len(repr_old) >= 2:
+            for pair in zip(repr_old[:-1], repr_old[1:]):
+                old[pair][pretoken_id] += 1
+        if len(repr_new) >= 2:
+            for pair in zip(repr_new[:-1], repr_new[1:]):
+                new[pair][pretoken_id] += 1
+
+    for k in old.keys() | new.keys():
+        new[k].subtract(old[k])
+    return new
 
 
 # TODO: make this use ID's internally. Then use a global delta-based approach
@@ -89,36 +143,50 @@ def train_bpe(
     vocab_size: int,
     special_tokens: list[str],
 ) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
-    merges: list[tuple[bytes, bytes]] = []
-
-    vocab: dict[int, bytes] = {x: bytes([x]) for x in range(256)}
-    assert all(bytes([k]) == v for k, v in vocab.items())
-    assert len(vocab) < vocab_size
 
     with open(input_path, "rb") as file:
         raw = file.read().decode("utf-8", errors="ignore")
-        docs = regex.splititer("|".join(map(regex.escape, special_tokens)), raw)
-        pretokens = split_pretokens(docs)
-        pretoken_counts: PretokenCounts = defaultdict(int)
 
-        for pretoken in pretokens:
-            word = tuple(map(int, pretoken.group().encode("utf-8", errors="ignore")))
-            pretoken_counts[word] += 1
+    pretoken_vocab, pretoken_id_counts = pretokenize(raw, special_tokens)
+    assert len(pretoken_vocab) == len(pretoken_id_counts)
+    assert len(pretoken_vocab) > 0
 
-        while len(vocab) < vocab_size - len(special_tokens):
-            pair_counts = get_stats(pretoken_counts)
-            if pair_counts is None:
-                break
-            to_merge = max(pair_counts.items(), key=lambda x: (x[1], (vocab[x[0][0]], vocab[x[0][1]])))[0]
-            newTokenId = len(vocab)
-            vocab[newTokenId] = vocab[to_merge[0]] + vocab[to_merge[1]]
-            merges.append((vocab[to_merge[0]], vocab[to_merge[1]]))
-            merge_counts(pretoken_counts, to_merge, newTokenId)
+    token_vocab, token_pair_counts, token_pair_in_pretokens = init_stats(pretoken_vocab, pretoken_id_counts)
+    assert all(bytes([k]) == v for k, v in token_vocab.items())
+    assert len(token_vocab) < vocab_size
 
-        for special_token in special_tokens:
-            vocab[len(vocab)] = special_token.encode("utf-8")
+    merges: list[tuple[bytes, bytes]] = []
+    while len(token_vocab) < vocab_size - len(special_tokens):
+        to_merge, _count = max(
+            token_pair_counts.items(), key=lambda x: (x[1], token_vocab[x[0][0]], token_vocab[x[0][1]])
+        )
+        merges.append((token_vocab[to_merge[0]], token_vocab[to_merge[1]]))
 
-    return vocab, merges
+        new_token_id = len(token_vocab)
+        token_vocab[new_token_id] = token_vocab[to_merge[0]] + token_vocab[to_merge[1]]
+
+        affected_pretoken_ids = token_pair_in_pretokens[to_merge]
+        new_pretoken_reprs = {
+            pretoken_id: merge_pair(pretoken_vocab[pretoken_id], to_merge, new_token_id)
+            for pretoken_id in affected_pretoken_ids
+        }
+
+        pretoken_repr_old_to_new = {
+            pretoken_id: (pretoken_vocab[pretoken_id], new_pretoken_reprs[pretoken_id])
+            for pretoken_id in affected_pretoken_ids
+        }
+        delta_token_pair_counts = token_pair_counts_delta(pretoken_repr_old_to_new)
+        delta_token_pair_in_pretokens = token_pair_in_pretokens_delta(pretoken_repr_old_to_new)
+
+        # update using delta
+        token_pair_counts += delta_token_pair_counts
+        for k, delta in delta_token_pair_in_pretokens.items():
+            token_pair_in_pretokens[k] += delta
+
+    for special_token in special_tokens:
+        token_vocab[len(token_vocab)] = special_token.encode("utf-8")
+
+    return token_vocab, merges
 
 
 @dataclass(frozen=True)
