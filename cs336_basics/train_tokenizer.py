@@ -38,26 +38,18 @@ PretokenVocab = dict[PretokenId, Word]
 
 
 def pretokenize(raw: str, special_tokens: list[str]) -> tuple[PretokenVocab, PretokenIdCounts]:
-    pretoken_vocab = {}
-    seen = set()
-
-    pretoken_counts = Counter()
 
     docs = regex.splititer("|".join(map(regex.escape, special_tokens)), raw)
     pretokens = split_pretokens(docs)
 
-    for pretoken in pretokens:
-        # Can't immediately use pretoken ID's since i want to parallelize later.
-        word = tuple(map(int, pretoken.group().encode("utf-8", errors="ignore")))
-        pretoken_counts[word] += 1
+    counts = Counter(map(lambda x: x.group().encode("utf-8", errors="ignore"), pretokens))
 
-        if word not in seen:
-            seen.add(word)
-            pretoken_vocab[len(pretoken_vocab)] = word
+    pretoken_items = list(counts.items())
+    pretoken_items.sort()
 
-    pretoken_id_counts = Counter(
-        {pretoken_id: pretoken_counts[pretoken] for pretoken_id, pretoken in pretoken_vocab.items()}
-    )
+    pretoken_vocab = {i: tuple(map(int, bytes)) for i, (bytes, count) in enumerate(pretoken_items)}
+    pretoken_id_counts = Counter({i: count for i, (bytes, count) in enumerate(pretoken_items)})
+
     return pretoken_vocab, pretoken_id_counts
 
 
