@@ -37,7 +37,9 @@ def split_pretokens(text: Iterable[str]):
         yield from regex.finditer(PAT, str)
 
 
-def pretokenize(raw: str, special_tokens: list[str]) -> tuple[PretokenVocab, PretokenIdCounts]:
+def pretokenize(input_path: str | os.PathLike, special_tokens: list[str]) -> tuple[PretokenVocab, PretokenIdCounts]:
+    with open(input_path, "rb") as file:
+        raw = file.read().decode("utf-8", errors="ignore")
 
     docs = regex.splititer("|".join(map(regex.escape, special_tokens)), raw)
 
@@ -181,11 +183,7 @@ def train_bpe(
     vocab_size: int,
     special_tokens: list[str],
 ) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
-
-    with open(input_path, "rb") as file:
-        raw = file.read().decode("utf-8", errors="ignore")
-
-    pretoken_vocab, pretoken_id_counts = pretokenize(raw, special_tokens)
+    pretoken_vocab, pretoken_id_counts = pretokenize(input_path, special_tokens)
     assert len(pretoken_vocab) == len(pretoken_id_counts)
     assert len(pretoken_vocab) > 0
 
