@@ -39,6 +39,7 @@ PretokenVocab = dict[PretokenId, Word]
 
 def pretokenize(raw: str, special_tokens: list[str]) -> tuple[PretokenVocab, PretokenIdCounts]:
     pretoken_vocab = {}
+    seen = set()
 
     pretoken_counts = Counter()
 
@@ -50,7 +51,8 @@ def pretokenize(raw: str, special_tokens: list[str]) -> tuple[PretokenVocab, Pre
         word = tuple(map(int, pretoken.group().encode("utf-8", errors="ignore")))
         pretoken_counts[word] += 1
 
-        if word not in pretoken_vocab:
+        if word not in seen:
+            seen.add(word)
             pretoken_vocab[len(pretoken_vocab)] = word
 
     pretoken_id_counts = Counter(
