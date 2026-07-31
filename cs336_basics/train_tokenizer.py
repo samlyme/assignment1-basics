@@ -20,12 +20,6 @@ class Tokenizer(ABC):
         raise NotImplementedError
 
 
-def split_pretokens(text: Iterable[str]):
-    PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
-    for str in text:
-        yield from regex.finditer(PAT, str)
-
-
 type TokenId = int
 type PretokenId = int
 TokenIdPair = tuple[TokenId, TokenId]
@@ -37,9 +31,16 @@ PairCounts = dict[tuple[TokenId, TokenId], int]
 PretokenVocab = dict[PretokenId, Word]
 
 
+def split_pretokens(text: Iterable[str]):
+    PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
+    for str in text:
+        yield from regex.finditer(PAT, str)
+
+
 def pretokenize(raw: str, special_tokens: list[str]) -> tuple[PretokenVocab, PretokenIdCounts]:
 
     docs = regex.splititer("|".join(map(regex.escape, special_tokens)), raw)
+
     pretokens = split_pretokens(docs)
 
     counts = Counter(map(lambda x: x.group().encode("utf-8", errors="ignore"), pretokens))
