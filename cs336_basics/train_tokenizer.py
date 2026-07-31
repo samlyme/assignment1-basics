@@ -110,7 +110,7 @@ type PretokenVocabDiff = dict[PretokenId, tuple[Word, Word]]
 
 def update_pretoken_vocab(
     pretoken_vocab: PretokenVocab, affected_pretoken_ids: set[PretokenId], to_merge: TokenIdPair, new_token_id: TokenId
-):
+) -> PretokenVocabDiff:
     pretoken_vocab_diff = {
         pretoken_id: (pretoken_vocab[pretoken_id], merge_pair(pretoken_vocab[pretoken_id], to_merge, new_token_id))
         for pretoken_id in affected_pretoken_ids
@@ -143,7 +143,6 @@ def token_pair_counts_delta(
 def update_token_pair_counts(
     token_pair_counts: TokenPairCounts,
     pretoken_id_counts: PretokenIdCounts,
-    pretoken_vocab: PretokenVocab,
     pretoken_vocab_diff: dict[PretokenId, tuple[Word, Word]],
 ):
     delta = token_pair_counts_delta(pretoken_vocab_diff, pretoken_id_counts)
@@ -173,7 +172,6 @@ def token_pair_from_delta(
 
 def update_token_pair_from(
     token_pair_from: TokenPairInPretokens,
-    pretoken_vocab: PretokenVocab,
     delta_pretoken_vocab: dict[PretokenId, tuple[Word, Word]],
 ):
     remove, add = token_pair_from_delta(delta_pretoken_vocab)
@@ -217,9 +215,9 @@ def train_bpe(
         # Apply updates
         pretoken_vocab_diff = update_pretoken_vocab(pretoken_vocab, affected_pretoken_ids, to_merge, new_token_id)
 
-        update_token_pair_counts(token_pair_counts, pretoken_id_counts, pretoken_vocab, pretoken_vocab_diff)
+        update_token_pair_counts(token_pair_counts, pretoken_id_counts, pretoken_vocab_diff)
 
-        update_token_pair_from(token_pair_from, pretoken_vocab, pretoken_vocab_diff)
+        update_token_pair_from(token_pair_from, pretoken_vocab_diff)
 
     for special_token in special_tokens:
         token_vocab[len(token_vocab)] = special_token.encode("utf-8")
