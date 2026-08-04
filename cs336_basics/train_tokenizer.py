@@ -5,9 +5,8 @@ from dataclasses import dataclass
 from datetime import datetime
 import os
 import pickle
-from collections.abc import Iterable
 
-import regex
+from cs336_basics.pretokenizer import index_pretokens, parallel_pretokenize
 
 
 class Tokenizer(ABC):
@@ -29,31 +28,6 @@ PairCounts = dict[tuple[TokenId, TokenId], int]
 
 
 PretokenVocab = dict[PretokenId, Word]
-
-
-def split_pretokens(text: Iterable[str]):
-    PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
-    for str in text:
-        yield from regex.finditer(PAT, str)
-
-
-def pretokenize(input_path: str | os.PathLike, special_tokens: list[str]) -> tuple[PretokenVocab, PretokenIdCounts]:
-    with open(input_path, "rb") as file:
-        raw = file.read().decode("utf-8", errors="ignore")
-
-    docs = regex.splititer("|".join(map(regex.escape, special_tokens)), raw)
-
-    pretokens = split_pretokens(docs)
-
-    counts = Counter(map(lambda x: x.group().encode("utf-8", errors="ignore"), pretokens))
-
-    pretoken_items = list(counts.items())
-    pretoken_items.sort()
-
-    pretoken_vocab = {i: tuple(map(int, bytes)) for i, (bytes, count) in enumerate(pretoken_items)}
-    pretoken_id_counts = Counter({i: count for i, (bytes, count) in enumerate(pretoken_items)})
-
-    return pretoken_vocab, pretoken_id_counts
 
 
 type TokenVocab = dict[int, bytes]
@@ -183,7 +157,10 @@ def train_bpe(
     vocab_size: int,
     special_tokens: list[str],
 ) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
-    pretoken_vocab, pretoken_id_counts = pretokenize(input_path, special_tokens)
+    # pretoken_counts = pretokenize(input_path, special_tokens)
+    pretoken_counts = parallel_pretokenize(input_path, special_tokens, 2)
+    pretoken_vocab, pretoken_id_counts = index_pretokens(pretoken_counts)
+
     assert len(pretoken_vocab) == len(pretoken_id_counts)
     assert len(pretoken_vocab) > 0
 
@@ -229,7 +206,8 @@ def main():
         type=str,
         help="Path to the file to read",
     )
-    parser.add_argument("--vocab-size", type=int, default=256 + 17, help="Final vocab size")
+    parser.add_argument("--vocab-size", type=int, default=1000, help="Final vocab size")
+    parser.add_argument("--workers", type=int, default=4, help="Number of CPU's for pretokenization")
     parser.add_argument(
         "--output-path",
         "-o",
