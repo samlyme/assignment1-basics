@@ -1,6 +1,7 @@
 import argparse
+import time
 
-from cs336_basics.train_tokenizer import pretokenize
+from cs336_basics.pretokenizer import parallel_pretokenize, pretokenize
 
 
 def main():
@@ -13,11 +14,27 @@ def main():
 
     args = parser.parse_args()
 
-    with open(args.input_path, "rb") as file:
-        raw = file.read().decode("utf-8", errors="ignore")
     special_tokens = ["<|endoftext|>"]
 
-    pretoken_vocab, pretoken_id_counts = pretokenize(raw, special_tokens)
+    start = time.perf_counter()
+    pretokenize(args.input_path, special_tokens)
+    end = time.perf_counter()
+    print(f"Serial:\t{end - start:.4f}")
+
+    start = time.perf_counter()
+    parallel_pretokenize(args.input_path, special_tokens, 2)
+    end = time.perf_counter()
+    print(f"Parallel 2:\t{end - start:.4f}")
+
+    start = time.perf_counter()
+    parallel_pretokenize(args.input_path, special_tokens, 4)
+    end = time.perf_counter()
+    print(f"Parallel 4:\t{end - start:.4f}")
+
+    start = time.perf_counter()
+    parallel_pretokenize(args.input_path, special_tokens, 8)
+    end = time.perf_counter()
+    print(f"Parallel 8:\t{end - start:.4f}")
 
 
 if __name__ == "__main__":
