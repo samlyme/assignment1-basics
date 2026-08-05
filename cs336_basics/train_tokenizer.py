@@ -1,22 +1,10 @@
-from abc import ABC
 import argparse
 from collections import Counter, defaultdict
-from dataclasses import dataclass
-from datetime import datetime
 import os
+from pathlib import Path
 import pickle
 
 from cs336_basics.pretokenizer import index_pretokens, parallel_pretokenize
-
-
-class Tokenizer(ABC):
-    """Abstract interface for a tokenizer."""
-
-    def encode(self, string: str) -> list[int]:
-        raise NotImplementedError
-
-    def decode(self, indices: list[int]) -> str:
-        raise NotImplementedError
 
 
 type TokenId = int
@@ -193,12 +181,6 @@ def train_bpe(
     return token_vocab, merges
 
 
-@dataclass(frozen=True)
-class BPEParams:
-    vocab: dict[int, bytes]
-    merges: list[tuple[bytes, bytes]]
-
-
 def main():
     parser = argparse.ArgumentParser(description="Read a file as raw bytes.")
     parser.add_argument(
@@ -209,19 +191,26 @@ def main():
     parser.add_argument("--vocab-size", type=int, default=1000, help="Final vocab size")
     parser.add_argument("--workers", type=int, default=4, help="Number of CPU's for pretokenization")
     parser.add_argument(
-        "--output-path",
-        "-o",
-        type=str,
-        default=f"out/bpe_params_{datetime.now().strftime('%Y%m%d-%H%M%S')}.pkl",
-        help="Where to output trained params.",
+        "--out-dir",
+        type=Path,
+        default=Path("out"),
+        help="Directory where the trained parameters will be written",
     )
+
     args = parser.parse_args()
 
     vocab, merges = train_bpe(args.input_path, args.vocab_size, ["<|endoftext|>"])
 
-    params = BPEParams(vocab, merges)
-    with open(args.output_path, "wb") as out:
-        pickle.dump(params, out)
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+
+    vocab_out = args.out_dir / "vocab.pkl"
+    merges_out = args.out_dir / "merges.pkl"
+
+    with open(vocab_out, "wb") as out:
+        pickle.dump(vocab, out)
+
+    with open(merges_out, "wb") as out:
+        pickle.dump(merges, out)
 
 
 if __name__ == "__main__":
