@@ -1,6 +1,7 @@
 import argparse
 from collections.abc import Iterable
 from collections.abc import Iterator
+import heapq
 import pickle
 
 import regex
@@ -15,6 +16,7 @@ class Tokenizer:
         self.vocab = vocab
         self.vocab_index = {v: k for k, v in vocab.items()}
         self.merges = merges
+        self.merges_index = {pair: rank for rank, pair in enumerate(merges)}
         self.special_tokens: set[str] = set(special_tokens) if special_tokens else set()
         self.special_tokens_sorted = sorted(self.special_tokens, key=len, reverse=True)
 
@@ -32,18 +34,22 @@ class Tokenizer:
 
         return Tokenizer(vocab, merges, special_tokens)
 
-    def _apply_merge(self, symbol: tuple[bytes, ...], merge: tuple[bytes, bytes]) -> tuple[bytes, ...]:
+    def _apply_merge(
+        self, symbol: tuple[bytes, ...], merge: tuple[bytes, bytes]
+    ) -> tuple[tuple[bytes, ...], list[int]]:
         if len(symbol) < 2:
-            return symbol
+            return symbol, []
         if merge not in zip(symbol[:-1], symbol[1:]):
-            return symbol
+            return symbol, []
 
         out = []
+        out_indices = []  # which indices are the is the new item?
         i = 0
         while i < len(symbol) - 1:
             a, b = symbol[i], symbol[i + 1]
 
             if (a, b) == merge:
+                out_indices.append(len(out))
                 out.append(a + b)
                 i += 2
             else:
@@ -53,7 +59,7 @@ class Tokenizer:
         if i < len(symbol):
             out.append(symbol[i])
 
-        return tuple(out)
+        return tuple(out), out_indices
 
     def encode(self, string: str) -> list[int]:
         out: list[int] = []
@@ -66,19 +72,44 @@ class Tokenizer:
 
         for doc in docs:
             if doc in self.special_tokens:
-                out.append(self.vocab_index[doc.encode("utf-8", errors="ignore")])
+                out.append(self.vocab_index[doc.encode("utf-8")])
                 continue
 
             pretokens = split_pretokens([doc])
 
             for pretoken in pretokens:
                 pretoken_str = pretoken.group()
-                pretoken_bytes = pretoken_str.encode("utf-8", errors="ignore")
+                pretoken_bytes = pretoken_str.encode("utf-8")
 
                 symbol = tuple(bytes([b]) for b in pretoken_bytes)
 
-                for merge in self.merges:
-                    symbol = self._apply_merge(symbol, merge)
+                assert len(symbol) >= 1
+                if len(symbol) == 1:
+                    out.append(self.vocab_index[symbol[0]])
+                    continue
+
+                merge_queue = [
+                    (self.merges_index[pair], pair)
+                    for pair in zip(symbol[:-1], symbol[1:])
+                    if pair in self.merges_index
+                ]
+                heapq.heapify(merge_queue)
+
+                while merge_queue and len(symbol) > 1:
+                    _, merge = heapq.heappop(merge_queue)
+                    symbol, affected = self._apply_merge(symbol, merge)
+                    for i in affected:
+                        left, right = i - 1, i + 1
+                        if left > 0:
+                            pair = symbol[left], symbol[i]
+                            if pair in self.merges_index:
+                                rank = self.merges_index[pair]
+                                heapq.heappush(merge_queue, (rank, pair))
+                        if right < len(symbol):
+                            pair = symbol[i], symbol[right]
+                            if pair in self.merges_index:
+                                rank = self.merges_index[pair]
+                                heapq.heappush(merge_queue, (rank, pair))
 
                 for token in symbol:
                     out.append(self.vocab_index[token])
@@ -91,7 +122,7 @@ class Tokenizer:
 
     def decode(self, indices: list[int]) -> str:
         out = b"".join(self.vocab[i] for i in indices)
-        return out.decode("utf-8", errors="ignore")
+        return out.decode("utf-8")
 
 
 def main():
