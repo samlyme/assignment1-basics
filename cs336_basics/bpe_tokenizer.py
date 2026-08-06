@@ -59,7 +59,7 @@ class Tokenizer:
         if i < len(symbol):
             out.append(symbol[i])
 
-        return tuple(out)
+        return tuple(out), out_indices
 
     def encode(self, string: str) -> list[int]:
         out: list[int] = []
