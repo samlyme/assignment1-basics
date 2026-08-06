@@ -1,27 +1,119 @@
-from abc import ABC
+import argparse
+from collections.abc import Iterable
+from collections.abc import Iterator
+import pickle
+
+import regex
+
+from cs336_basics.pretokenizer import split_pretokens
 
 
-class Tokenizer(ABC):
-    """Abstract interface for a tokenizer."""
-
-    def __init__(self, vocab, merges, special_tokens=None):
-        raise NotImplementedError
-
-    def encode(self, string: str) -> list[int]:
-        raise NotImplementedError
-
-    def decode(self, indices: list[int]) -> str:
-        raise NotImplementedError
-
-
-class BPETokenizer(Tokenizer):
+class Tokenizer:
     def __init__(
         self, vocab: dict[int, bytes], merges: list[tuple[bytes, bytes]], special_tokens: list[str] | None = None
     ):
         self.vocab = vocab
+        self.vocab_index = {v: k for k, v in vocab.items()}
         self.merges = merges
-        self.special_tokens = special_tokens
+        self.special_tokens: set[str] = set(special_tokens) if special_tokens else set()
+
+    @classmethod
+    def from_files(cls, vocab_filepath: str, merges_filepath: str, special_tokens: list[str] | None = None):
+        with open(vocab_filepath, "rb") as file:
+            vocab = pickle.load(file)
+            assert type(vocab) is dict and all(type(k) is int and type(v) is bytes for k, v in vocab.items())
+
+        with open(merges_filepath, "rb") as file:
+            merges = pickle.load(file)
+            assert type(merges) is list and all(
+                type(i) is tuple and type(i[0]) is bytes and type(i[1]) is bytes for i in merges
+            )
+
+        return Tokenizer(vocab, merges, special_tokens)
+
+    def _apply_merge(self, symbol: tuple[bytes, ...], merge: tuple[bytes, bytes]) -> tuple[bytes, ...]:
+        if len(symbol) < 2:
+            return symbol
+        if merge not in zip(symbol[:-1], symbol[1:]):
+            return symbol
+
+        out = []
+        i = 0
+        while i < len(symbol) - 1:
+            a, b = symbol[i], symbol[i + 1]
+
+            if (a, b) == merge:
+                out.append(a + b)
+                i += 2
+            else:
+                out.append(a)
+                i += 1
+
+        if i < len(symbol):
+            out.append(symbol[i])
+
+        return tuple(out)
+
+    def encode(self, string: str) -> list[int]:
+        out: list[int] = []
+        separator = "|".join(map(regex.escape, sorted(self.special_tokens, key=len, reverse=True)))
+        docs = regex.splititer(f"({separator})", string)
+
+        for doc in docs:
+            doc
+            if doc in self.special_tokens:
+                out.append(self.vocab_index[doc.encode("utf-8", errors="ignore")])
+                continue
+
+            pretokens = split_pretokens([doc])
+
+            for pretoken in pretokens:
+                pretoken_str = pretoken.group()
+                pretoken_bytes = pretoken_str.encode("utf-8", errors="ignore")
+                if pretoken.group() in self.special_tokens:
+                    out.append(self.vocab_index[pretoken_bytes])
+                    continue
+
+                symbol = tuple(bytes([b]) for b in pretoken_bytes)
+
+                for merge in self.merges:
+                    symbol = self._apply_merge(symbol, merge)
+
+                for token in symbol:
+                    out.append(self.vocab_index[token])
+
+        return out
+
+    def encode_iterable(self, iterable: Iterable[str]) -> Iterator[int]:
+        for str in iterable:
+            yield from self.encode(str)
 
     def decode(self, indices: list[int]) -> str:
-        out = b"".join(self.vocab[index] for index in indices)
-        return out.decode(encoding="utf-8", errors="replace")
+        out = b"".join(self.vocab[i] for i in indices)
+        return out.decode("utf-8", errors="ignore")
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "vocab_filepath",
+        type=str,
+    )
+    parser.add_argument(
+        "merges_filepath",
+        type=str,
+    )
+    parser.add_argument("input_filepath", type=str)
+
+    args = parser.parse_args()
+
+    tokenizer = Tokenizer.from_files(args.vocab_filepath, args.merges_filepath, ["<|endoftext|>"])
+
+    with open(args.input_filepath, "rb") as file:
+        input = file.read().decode()
+
+    print(tokenizer.encode(input))
+
+
+if __name__ == "__main__":
+    main()
