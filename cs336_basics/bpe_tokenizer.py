@@ -95,12 +95,16 @@ class Tokenizer:
                 ]
                 heapq.heapify(merge_queue)
 
-                while merge_queue and len(symbol) > 1:
+                while merge_queue:
+                    # this is a bad assertion, merges can remove pairs,
+                    # but we do not remove them from the queue
+                    # assert len(symbol) > 1
+
                     _, merge = heapq.heappop(merge_queue)
                     symbol, affected = self._apply_merge(symbol, merge)
                     for i in affected:
                         left, right = i - 1, i + 1
-                        if left > 0:
+                        if left >= 0:
                             pair = symbol[left], symbol[i]
                             if pair in self.merges_index:
                                 rank = self.merges_index[pair]
@@ -122,7 +126,7 @@ class Tokenizer:
 
     def decode(self, indices: list[int]) -> str:
         out = b"".join(self.vocab[i] for i in indices)
-        return out.decode("utf-8")
+        return out.decode("utf-8", errors="replace")
 
 
 def main():
