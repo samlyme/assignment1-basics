@@ -1,1 +1,1 @@
-sudo py-spy top -- .venv/bin/python cs336_basics/train_tokenizer.py data/owt_train.txt --vocab-size 32000 -o out/bpe_params_owt-train.pkl
+py-spy  record --subprocesses -o out/train_bpe_otw_profile.svg -- .venv/bin/python cs336_basics/train_tokenizer.py data/owt_train.txt --workers 16 --vocab-size 32000 --out-dir out/bpe_params_owt-train
