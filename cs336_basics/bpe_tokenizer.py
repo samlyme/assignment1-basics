@@ -16,6 +16,7 @@ class Tokenizer:
         self.vocab_index = {v: k for k, v in vocab.items()}
         self.merges = merges
         self.special_tokens: set[str] = set(special_tokens) if special_tokens else set()
+        self.special_tokens_sorted = sorted(self.special_tokens, key=len, reverse=True)
 
     @classmethod
     def from_files(cls, vocab_filepath: str, merges_filepath: str, special_tokens: list[str] | None = None):
@@ -56,11 +57,14 @@ class Tokenizer:
 
     def encode(self, string: str) -> list[int]:
         out: list[int] = []
-        separator = "|".join(map(regex.escape, sorted(self.special_tokens, key=len, reverse=True)))
-        docs = regex.splititer(f"({separator})", string)
+
+        if self.special_tokens_sorted:
+            separator = "|".join(map(regex.escape, self.special_tokens_sorted))
+            docs = regex.splititer(f"({separator})", string)
+        else:
+            docs = [string]
 
         for doc in docs:
-            doc
             if doc in self.special_tokens:
                 out.append(self.vocab_index[doc.encode("utf-8", errors="ignore")])
                 continue
@@ -70,9 +74,6 @@ class Tokenizer:
             for pretoken in pretokens:
                 pretoken_str = pretoken.group()
                 pretoken_bytes = pretoken_str.encode("utf-8", errors="ignore")
-                if pretoken.group() in self.special_tokens:
-                    out.append(self.vocab_index[pretoken_bytes])
-                    continue
 
                 symbol = tuple(bytes([b]) for b in pretoken_bytes)
 
