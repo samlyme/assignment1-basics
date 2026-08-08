@@ -153,7 +153,7 @@ def main():
     res = tokenizer.encode(input)
     tokens = np.array(res, dtype=np.uint16)
 
-    np.save(args.output_file, tokens)
+    np.save(args.output_filepath, tokens)
 
 
 if __name__ == "__main__":
