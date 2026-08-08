@@ -4,6 +4,7 @@ from collections.abc import Iterator
 import heapq
 import pickle
 
+import numpy as np
 import regex
 
 from cs336_basics.pretokenizer import split_pretokens
@@ -140,6 +141,7 @@ def main():
         type=str,
     )
     parser.add_argument("input_filepath", type=str)
+    parser.add_argument("output_filepath", type=str)
 
     args = parser.parse_args()
 
@@ -148,7 +150,10 @@ def main():
     with open(args.input_filepath, "rb") as file:
         input = file.read().decode()
 
-    print(tokenizer.encode(input))
+    res = tokenizer.encode(input)
+    tokens = np.array(res, dtype=np.uint16)
+
+    np.save(args.output_file, tokens)
 
 
 if __name__ == "__main__":
