@@ -1,3 +1,5 @@
+from math import ceil
+
 from einops import einsum, reduce
 import torch
 
@@ -79,3 +81,32 @@ class RMSNorm(torch.nn.Module):
         result = (x / rms) * self.g
 
         return result.to(in_dtype)
+
+
+def silu(x: torch.Tensor) -> torch.Tensor:
+    return x * torch.sigmoid(x)
+
+
+class SwiGLU(torch.nn.Module):
+    def __init__(
+        self,
+        d_model: int,
+        d_ff: int | None = None,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+    ) -> None:
+        super().__init__()
+
+        self.d_model = d_model
+
+        if d_ff is None:
+            x = 8 / 3 * d_model
+            d_ff = ceil(x / 64) * 64
+        self.d_ff = d_ff
+
+        self.W_1 = Linear(d_model, d_ff, device, dtype)
+        self.W_2 = Linear(d_ff, d_model, device, dtype)
+        self.W_3 = Linear(d_model, d_ff, device, dtype)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.W_2(silu(self.W_1(x)) * self.W_3(x))
