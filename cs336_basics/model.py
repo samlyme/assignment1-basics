@@ -154,18 +154,17 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         assert torch.all(0 <= token_positions)
         assert torch.all(token_positions < self.max_seq_len)
 
-        token_positions = token_positions.broadcast_to(x.shape[:-1])
         x = rearrange(x, "... seq (k pair) -> ... seq k pair", pair=2)
 
         Rs = self._get_rotation_tensor(token_positions)
 
+        # NOTE: a standard matmul in einops is "m n, n k -> m k".
+        # Thus, a matvec is "row col, col 1 -> row 1"
         z = einsum(Rs, x, "... seq k row col, ... seq k col -> ... seq k row")
 
         return rearrange(z, "... seq k pair -> ... seq (k pair)")
 
     def _get_rotation_tensor(self, token_positions) -> torch.Tensor:
-        # TODO: represent rotation as tensor: ... k (2, 2)
-        # where ... is from token_positions.
-
+        # Returns a tensor of shape ... k 2 2.
         rotations: torch.Tensor = self.rotations  # type: ignore
         return rotations[token_positions]
