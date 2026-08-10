@@ -16,6 +16,7 @@ from cs336_basics.model import (
     RMSNorm,
     RotaryPositionalEmbedding,
     SwiGLU,
+    softmax,
 )
 from cs336_basics.train_tokenizer import train_bpe
 
@@ -455,7 +456,7 @@ def run_softmax(
         Float[Tensor, "..."]: Tensor of with the same shape as `in_features` with the output of
         softmax normalizing the specified `dim`.
     """
-    raise NotImplementedError
+    return softmax(in_features, dim)
 
 
 def run_cross_entropy(

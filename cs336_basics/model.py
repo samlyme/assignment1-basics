@@ -168,3 +168,14 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         # Returns a tensor of shape ... k 2 2.
         rotations: torch.Tensor = self.rotations  # type: ignore
         return rotations[token_positions]
+
+
+def softmax(x: torch.Tensor, dim: int) -> torch.Tensor:
+    max = torch.max(x, dim=dim, keepdim=True).values
+    x = x - max
+
+    x = torch.exp(x)
+    sum = torch.sum(x, dim=dim, keepdim=True)
+
+    x = x / sum
+    return x
