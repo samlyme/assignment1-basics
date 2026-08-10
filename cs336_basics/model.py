@@ -1,6 +1,7 @@
 from math import ceil
+import math
 
-from einops import einsum, reduce
+from einops import einsum, rearrange, reduce
 import torch
 
 
@@ -110,3 +111,66 @@ class SwiGLU(torch.nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.W_2(silu(self.W_1(x)) * self.W_3(x))
+
+
+class RotaryPositionalEmbedding(torch.nn.Module):
+    def __init__(
+        self,
+        theta: float,
+        d_k: int,
+        max_seq_len: int,
+        device: torch.device | None = None,
+    ) -> None:
+        super().__init__()
+
+        self.big_theta = theta
+        self.d_k = d_k
+        self.max_seq_len = max_seq_len
+
+        assert d_k % 2 == 0
+        K = d_k // 2
+        buf = torch.empty((max_seq_len, K, 2, 2))
+
+        def get_theta(i: int, k: int):
+            p = k / K
+            denom = self.big_theta**p
+            return i / denom
+
+        for position in range(max_seq_len):
+            for ki in range(K):
+                theta_ik = get_theta(position, ki)
+                buf[position, ki] = torch.tensor(
+                    [
+                        [math.cos(theta_ik), -math.sin(theta_ik)],
+                        [math.sin(theta_ik), math.cos(theta_ik)],
+                    ]
+                )
+
+        self.register_buffer("rotations", buf.to(device), persistent=False)
+
+    def forward(
+        self, x: torch.Tensor, token_positions: torch.Tensor
+    ) -> torch.Tensor:
+        # NOTE: could be 1-indexed
+        assert all(i < self.max_seq_len for i in token_positions)
+
+        # token_positions = rearrange(token_positions, "... seq -> ... seq")
+        token_positions = token_positions.broadcast_to(x.shape[:-1])
+        token_positions.shape
+        x = rearrange(x, "... seq (k pair) -> ... seq k pair", pair=2)
+        x.shape
+
+        Rs = self._get_rotation_tensor(token_positions)
+        Rs.shape
+
+        z = einsum(Rs, x, "... seq k row col, ... seq k col -> ... seq k row")
+        z.shape
+
+        return rearrange(z, "... seq k pair -> ... seq (k pair)")
+
+    def _get_rotation_tensor(self, token_positions) -> torch.Tensor:
+        # TODO: represent rotation as tensor: ... k (2, 2)
+        # where ... is from token_positions.
+
+        rotations: torch.Tensor = self.rotations  # type: ignore
+        return rotations[token_positions]
