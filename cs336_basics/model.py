@@ -151,20 +151,15 @@ class RotaryPositionalEmbedding(torch.nn.Module):
     def forward(
         self, x: torch.Tensor, token_positions: torch.Tensor
     ) -> torch.Tensor:
-        # NOTE: could be 1-indexed
-        assert all(i < self.max_seq_len for i in token_positions)
+        assert torch.all(0 <= token_positions)
+        assert torch.all(token_positions < self.max_seq_len)
 
-        # token_positions = rearrange(token_positions, "... seq -> ... seq")
         token_positions = token_positions.broadcast_to(x.shape[:-1])
-        token_positions.shape
         x = rearrange(x, "... seq (k pair) -> ... seq k pair", pair=2)
-        x.shape
 
         Rs = self._get_rotation_tensor(token_positions)
-        Rs.shape
 
         z = einsum(Rs, x, "... seq k row col, ... seq k col -> ... seq k row")
-        z.shape
 
         return rearrange(z, "... seq k pair -> ... seq (k pair)")
 
