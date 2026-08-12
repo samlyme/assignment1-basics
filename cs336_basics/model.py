@@ -1,6 +1,5 @@
 from math import ceil, sqrt
 import math
-from typing import Any
 
 from jaxtyping import Bool, Float, Int
 from torch import Tensor
