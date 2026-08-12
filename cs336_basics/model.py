@@ -1,5 +1,8 @@
-from math import ceil
+from math import ceil, sqrt
 import math
+
+from jaxtyping import Bool, Float, Int
+from torch import Tensor
 
 from einops import einsum, rearrange, reduce
 import torch
@@ -179,3 +182,30 @@ def softmax(x: torch.Tensor, dim: int) -> torch.Tensor:
 
     x = x / sum
     return x
+
+
+def scaled_dot_product_attention(
+    Q: Float[Tensor, " ... n d_k"],
+    K: Float[Tensor, " ... m d_k"],
+    V: Float[Tensor, " ... m d_v"],
+    mask: Bool[Tensor, " ... n m"] | None = None,
+) -> Float[Tensor, " ... n d_v"]:
+    # NOTE: trust the jaxtyping. No need for extensive assert's
+    d_k = Q.shape[-1]
+    n = Q.shape[-2]
+    m = K.shape[-2]
+
+    a = einsum(Q, K, "... n d_k, ... m d_k -> ... n m") / sqrt(d_k)
+    a.shape
+
+    mask = (
+        torch.where(mask, 0.0, float("-inf"))
+        if mask is not None
+        else torch.zeros((n, m))
+    )
+
+    a = a + mask
+
+    a = softmax(a, -1)
+
+    return einsum(a, V, "... sq sk, ... sk d_v -> ... sq d_v")
