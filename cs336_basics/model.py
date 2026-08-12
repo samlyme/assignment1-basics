@@ -337,5 +337,4 @@ class TransformerLM(torch.nn.Module):
 
         z = self.ln_final.forward(z)
         z = self.lm_head.forward(z)
-        prob = softmax(z, -1)
-        return prob
+        return z
