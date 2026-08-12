@@ -209,3 +209,66 @@ def scaled_dot_product_attention(
     a = softmax(a, -1)
 
     return einsum(a, V, "... sq sk, ... sk d_v -> ... sq d_v")
+
+
+class MultiheadSelfAttention(torch.nn.Module):
+    def __init__(
+        self,
+        d_model: int,
+        num_heads: int,
+        positional_embedding: torch.nn.Module | None = None,
+    ) -> None:
+        super().__init__()
+
+        assert d_model % num_heads == 0
+
+        # following paper
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.d_k = d_model // num_heads
+        self.d_v = d_model // num_heads
+
+        # same as d_model * d_model
+        # wrote them using "semantics" in mind lol.
+        self.q_proj = Linear(d_model, self.d_k * num_heads)
+        self.k_proj = Linear(d_model, self.d_k * num_heads)
+        self.v_proj = Linear(d_model, self.d_v * num_heads)
+        self.o_proj = Linear(d_model, self.d_v * num_heads)
+
+        self.positional_embedding = positional_embedding
+
+    def forward(
+        self,
+        x: Float[Tensor, " ... n d_model"],
+        token_positions: Int[Tensor, " ... sequence_length"] | None = None,
+    ) -> Float[Tensor, "... n d_v"]:
+        Q = self.q_proj.forward(x)
+        K = self.k_proj.forward(x)
+        V = self.v_proj.forward(x)
+
+        Q_i = rearrange(
+            Q, "... n (head d_k) -> ... head n d_k", head=self.num_heads
+        )
+        K_i = rearrange(
+            K, "... n (head d_k) -> ... head n d_k", head=self.num_heads
+        )
+        if (
+            token_positions is not None
+            and self.positional_embedding is not None
+        ):
+            Q_i = self.positional_embedding.forward(Q_i, token_positions)
+            K_i = self.positional_embedding.forward(K_i, token_positions)
+
+        V_i = rearrange(
+            V, "... n (head d_v) -> ... head n d_v", head=self.num_heads
+        )
+
+        n = x.shape[-2]
+        causal_mask = torch.tril(
+            torch.ones(n, n, dtype=torch.bool),
+            diagonal=0,
+        )
+
+        out = scaled_dot_product_attention(Q_i, K_i, V_i, causal_mask)
+        out = rearrange(out, "... head n d_v -> ... n (head d_v)")
+        return self.o_proj(out)
