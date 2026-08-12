@@ -18,6 +18,8 @@ from cs336_basics.model import (
     SwiGLU,
     MultiheadSelfAttention,
     TransformerBlock,
+    TransformerLM,
+    silu,
     softmax,
     scaled_dot_product_attention,
 )
@@ -43,7 +45,7 @@ def run_linear(
         Float[Tensor, "... d_out"]: The transformed output of your linear module.
     """
     model = Linear(d_in, d_out)
-    model.load_state_dict({"W": weights})
+    model.load_state_dict({"weight": weights})
     return model.forward(in_features)
 
 
@@ -67,7 +69,7 @@ def run_embedding(
     """
 
     model = Embedding(vocab_size, d_model)
-    model.load_state_dict({"W": weights})
+    model.load_state_dict({"weight": weights})
     return model.forward(token_ids)
 
 
@@ -103,7 +105,7 @@ def run_swiglu(
     model = SwiGLU(d_model, d_ff)
 
     model.load_state_dict(
-        {"W_1.W": w1_weight, "W_2.W": w2_weight, "W_3.W": w3_weight}
+        {"w1.weight": w1_weight, "w2.weight": w2_weight, "w3.weight": w3_weight}
     )
 
     return model.forward(in_features)
@@ -164,10 +166,10 @@ def run_multihead_self_attention(
     model = MultiheadSelfAttention(d_model, num_heads)
     model.load_state_dict(
         {
-            "q_proj.W": q_proj_weight,
-            "k_proj.W": k_proj_weight,
-            "v_proj.W": v_proj_weight,
-            "o_proj.W": o_proj_weight,
+            "q_proj.weight": q_proj_weight,
+            "k_proj.weight": k_proj_weight,
+            "v_proj.weight": v_proj_weight,
+            "output_proj.weight": o_proj_weight,
         }
     )
     return model.forward(in_features)
@@ -215,10 +217,10 @@ def run_multihead_self_attention_with_rope(
     model = MultiheadSelfAttention(d_model, num_heads, rope)
     model.load_state_dict(
         {
-            "q_proj.W": q_proj_weight,
-            "k_proj.W": k_proj_weight,
-            "v_proj.W": v_proj_weight,
-            "o_proj.W": o_proj_weight,
+            "q_proj.weight": q_proj_weight,
+            "k_proj.weight": k_proj_weight,
+            "v_proj.weight": v_proj_weight,
+            "output_proj.weight": o_proj_weight,
         }
     )
     return model.forward(in_features, token_positions)
@@ -403,7 +405,13 @@ def run_transformer_lm(
         Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized
         next-word distribution for each token.
     """
-    raise NotImplementedError
+    d_k = d_model // num_heads
+    rope = RotaryPositionalEmbedding(rope_theta, d_k, context_length)
+    model = TransformerLM(
+        vocab_size, d_model, num_heads, d_ff, context_length, num_layers, rope
+    )
+    model.load_state_dict(weights)
+    return model.forward(in_indices)
 
 
 def run_rmsnorm(
@@ -427,7 +435,7 @@ def run_rmsnorm(
         RMSNorm of the `in_features`.
     """
     model = RMSNorm(d_model, eps)
-    model.load_state_dict({"g": weights})
+    model.load_state_dict({"weight": weights})
     return model.forward(in_features)
 
 
@@ -442,7 +450,7 @@ def run_silu(in_features: Float[Tensor, " ..."]) -> Float[Tensor, " ..."]:
         Float[Tensor,"..."]: of with the same shape as `in_features` with the output of applying
         SiLU to each element.
     """
-    raise NotImplementedError
+    return silu(in_features)
 
 
 def run_get_batch(

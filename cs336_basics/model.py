@@ -1,5 +1,6 @@
 from math import ceil, sqrt
 import math
+from typing import Any
 
 from jaxtyping import Bool, Float, Int
 from torch import Tensor
@@ -45,7 +46,7 @@ class Embedding(torch.nn.Module):
         super().__init__()
 
         std = 1
-        self.W = torch.nn.Parameter(
+        self.weight = torch.nn.Parameter(
             torch.nn.init.trunc_normal_(
                 torch.empty(
                     (num_embeddings, embedding_dim), dtype=dtype, device=device
@@ -57,7 +58,7 @@ class Embedding(torch.nn.Module):
         )
 
     def forward(self, token_ids: torch.Tensor) -> torch.Tensor:
-        return self.W[token_ids]
+        return self.weight[token_ids]
 
 
 class RMSNorm(torch.nn.Module):
@@ -233,7 +234,7 @@ class MultiheadSelfAttention(torch.nn.Module):
         self.q_proj = Linear(d_model, self.d_k * num_heads)
         self.k_proj = Linear(d_model, self.d_k * num_heads)
         self.v_proj = Linear(d_model, self.d_v * num_heads)
-        self.output_proj = Linear(d_model, self.d_v * num_heads)
+        self.output_proj = Linear(self.d_v * num_heads, d_model)
 
         self.positional_embedding = positional_embedding
 
@@ -301,3 +302,40 @@ class TransformerBlock(torch.nn.Module):
         z_1 = x + self.attn.forward(self.ln1.forward(x), token_positions)
 
         return z_1 + self.ffn.forward(self.ln2.forward(z_1))
+
+
+class TransformerLM(torch.nn.Module):
+    def __init__(
+        self,
+        vocab_size: int,
+        d_model: int,
+        num_heads: int,
+        d_ff: int,
+        context_length: int,
+        num_layers: int,
+        positional_embedding: torch.nn.Module,
+    ) -> None:
+        super().__init__()
+
+        self.token_embeddings = Embedding(vocab_size, d_model)
+
+        self.layers = torch.nn.ModuleList(
+            TransformerBlock(d_model, num_heads, d_ff, positional_embedding)
+            for i in range(num_layers)
+        )
+        self.ln_final = RMSNorm(d_model)
+        self.lm_head = Linear(d_model, vocab_size)
+
+    def forward(
+        self, x: Int[Tensor, " batch_size sequence_length"]
+    ) -> Float[Tensor, " batch_size sequence_length vocab_size"]:
+        emb = self.token_embeddings.forward(x)
+
+        z = emb
+        for layer in self.layers:
+            z = layer.forward(z)
+
+        z = self.ln_final.forward(z)
+        z = self.lm_head.forward(z)
+        prob = softmax(z, -1)
+        return prob
