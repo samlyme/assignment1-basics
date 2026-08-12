@@ -193,19 +193,12 @@ def scaled_dot_product_attention(
 ) -> Float[Tensor, " ... n d_v"]:
     # NOTE: trust the jaxtyping. No need for extensive assert's
     d_k = Q.shape[-1]
-    n = Q.shape[-2]
-    m = K.shape[-2]
 
     a = einsum(Q, K, "... n d_k, ... m d_k -> ... n m") / sqrt(d_k)
     a.shape
 
-    mask = (
-        torch.where(mask, 0.0, float("-inf"))
-        if mask is not None
-        else torch.zeros((n, m))
-    )
-
-    a = a + mask
+    if mask is not None:
+        a = a.masked_fill(~mask, float("-inf"))
 
     a = softmax(a, -1)
 
@@ -266,7 +259,7 @@ class MultiheadSelfAttention(torch.nn.Module):
 
         n = x.shape[-2]
         causal_mask = torch.tril(
-            torch.ones(n, n, dtype=torch.bool),
+            torch.ones(n, n, dtype=torch.bool, device=x.device),
             diagonal=0,
         )
 
@@ -297,7 +290,7 @@ class TransformerBlock(torch.nn.Module):
         self, x: Float[Tensor, " ... n d_model"]
     ) -> Float[Tensor, "... n d_model"]:
         n = x.shape[-2]
-        token_positions = torch.arange(n, dtype=torch.int)
+        token_positions = torch.arange(n, dtype=torch.long, device=x.device)
 
         z_1 = x + self.attn.forward(self.ln1.forward(x), token_positions)
 
