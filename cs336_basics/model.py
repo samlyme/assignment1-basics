@@ -19,7 +19,7 @@ class Linear(torch.nn.Module):
         super().__init__()
 
         std = (2 / (in_features + out_features)) ** 0.5
-        self.W = torch.nn.Parameter(
+        self.weight = torch.nn.Parameter(
             torch.nn.init.trunc_normal_(
                 torch.empty(
                     (out_features, in_features), dtype=dtype, device=device
@@ -31,7 +31,7 @@ class Linear(torch.nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return einsum(self.W, x, "d_out d_in, ... d_in -> ... d_out")
+        return einsum(self.weight, x, "d_out d_in, ... d_in -> ... d_out")
 
 
 class Embedding(torch.nn.Module):
@@ -70,7 +70,7 @@ class RMSNorm(torch.nn.Module):
     ) -> None:
         super().__init__()
         self.d_model = d_model
-        self.g = torch.nn.Parameter(
+        self.weight = torch.nn.Parameter(
             torch.ones(d_model, dtype=dtype, device=device)
         )
         self.eps = eps
@@ -82,7 +82,7 @@ class RMSNorm(torch.nn.Module):
         mean_square = reduce(x * x, "... d -> ... 1", "mean")
         rms = torch.sqrt(mean_square + self.eps)
 
-        result = (x / rms) * self.g
+        result = (x / rms) * self.weight
 
         return result.to(in_dtype)
 
@@ -108,12 +108,12 @@ class SwiGLU(torch.nn.Module):
             d_ff = ceil(x / 64) * 64
         self.d_ff = d_ff
 
-        self.W_1 = Linear(d_model, d_ff, device, dtype)
-        self.W_2 = Linear(d_ff, d_model, device, dtype)
-        self.W_3 = Linear(d_model, d_ff, device, dtype)
+        self.w1 = Linear(d_model, d_ff, device, dtype)
+        self.w2 = Linear(d_ff, d_model, device, dtype)
+        self.w3 = Linear(d_model, d_ff, device, dtype)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.W_2(silu(self.W_1(x)) * self.W_3(x))
+        return self.w2(silu(self.w1(x)) * self.w3(x))
 
 
 class RotaryPositionalEmbedding(torch.nn.Module):
@@ -233,14 +233,14 @@ class MultiheadSelfAttention(torch.nn.Module):
         self.q_proj = Linear(d_model, self.d_k * num_heads)
         self.k_proj = Linear(d_model, self.d_k * num_heads)
         self.v_proj = Linear(d_model, self.d_v * num_heads)
-        self.o_proj = Linear(d_model, self.d_v * num_heads)
+        self.output_proj = Linear(d_model, self.d_v * num_heads)
 
         self.positional_embedding = positional_embedding
 
     def forward(
         self,
         x: Float[Tensor, " ... n d_model"],
-        token_positions: Int[Tensor, " ... sequence_length"] | None = None,
+        token_positions: Int[Tensor, " ... n"] | None = None,
     ) -> Float[Tensor, "... n d_v"]:
         Q = self.q_proj.forward(x)
         K = self.k_proj.forward(x)
@@ -271,4 +271,33 @@ class MultiheadSelfAttention(torch.nn.Module):
 
         out = scaled_dot_product_attention(Q_i, K_i, V_i, causal_mask)
         out = rearrange(out, "... head n d_v -> ... n (head d_v)")
-        return self.o_proj(out)
+        return self.output_proj(out)
+
+
+class TransformerBlock(torch.nn.Module):
+    def __init__(
+        self,
+        d_model: int,
+        num_heads: int,
+        d_ff: int,
+        positional_embedding: torch.nn.Module | None = None,
+    ) -> None:
+        super().__init__()
+
+        self.ln1 = RMSNorm(d_model)
+        self.attn = MultiheadSelfAttention(
+            d_model, num_heads, positional_embedding
+        )
+
+        self.ln2 = RMSNorm(d_model)
+        self.ffn = SwiGLU(d_model, d_ff)
+
+    def forward(
+        self, x: Float[Tensor, " ... n d_model"]
+    ) -> Float[Tensor, "... n d_model"]:
+        n = x.shape[-2]
+        token_positions = torch.arange(n, dtype=torch.int)
+
+        z_1 = x + self.attn.forward(self.ln1.forward(x), token_positions)
+
+        return z_1 + self.ffn.forward(self.ln2.forward(z_1))
