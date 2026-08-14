@@ -23,6 +23,7 @@ from cs336_basics.model import (
     softmax,
     scaled_dot_product_attention,
 )
+from cs336_basics.train import cross_entropy
 from cs336_basics.train_tokenizer import train_bpe
 
 
@@ -510,7 +511,7 @@ def run_cross_entropy(
     Returns:
         Float[Tensor, ""]: The average cross-entropy loss across examples.
     """
-    raise NotImplementedError
+    return cross_entropy(inputs, targets)
 
 
 def run_gradient_clipping(
