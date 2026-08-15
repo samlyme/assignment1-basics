@@ -9,8 +9,7 @@ logits = torch.randn((BATCH, SEQ, VOCAB))
 
 expected = torch.randint(0, VOCAB, (BATCH, SEQ, 1))
 
-logits, expected
-
+print(logits.shape, expected.shape)
 # %%
 
-logits.gather(-1, expected)
+logits.gather(-1, expected).shape
