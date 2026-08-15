@@ -135,3 +135,75 @@ class AdamParamState(TypedDict):
     m: torch.Tensor
     v: torch.Tensor
     t: int
+
+
+class AdamW(torch.optim.Optimizer):
+    def __init__(
+        self,
+        params: Iterable[Tensor]
+        | Iterable[dict[str, Any]]
+        | Iterable[tuple[str, Tensor]],
+        lr: float = 0.001,
+        betas: tuple[float, float] = (0.9, 0.999),
+        eps: float = 1e-8,
+        weight_decay: float = 0,
+    ) -> None:
+
+        defaults = {
+            "lr": lr,
+            "betas": betas,
+            "eps": eps,
+            "weight_decay": weight_decay,
+        }
+        super().__init__(params, defaults)
+
+    @torch.no_grad()
+    def step(self, closure: Callable[[], float] | None = None) -> float | None:
+        with torch.enable_grad():
+            loss = closure() if closure else None
+
+        for group in self.param_groups:
+            alpha: float = group["lr"]
+            betas = group["betas"]
+            beta_1, beta_2 = betas
+            eps: float = group["eps"]
+            weight_decay: float = group["weight_decay"]
+
+            for p in group["params"]:
+                p: torch.Tensor
+
+                if p.grad is None:
+                    continue
+                g = p.grad
+
+                if not self.state[p]:
+                    # initialize the moments.
+                    state: AdamParamState = {
+                        "m": torch.zeros_like(p),
+                        "v": torch.zeros_like(p),
+                        "t": 0,
+                    }
+                    self.state[p] = state
+
+                state: AdamParamState = self.state[p]
+
+                # update state
+                state["t"] += 1
+
+                state["m"] *= beta_1
+                state["m"] += (1 - beta_1) * g
+
+                state["v"] *= beta_2
+                state["v"] += (1 - beta_2) * (g * g)
+
+                alpha_t = (
+                    alpha
+                    * math.sqrt(1 - beta_2 ** state["t"])
+                    / (1 - beta_1 ** state["t"])
+                )
+
+                # apply update
+                p -= alpha * weight_decay * p
+                p -= alpha_t * state["m"] / (state["v"].sqrt() + eps)
+
+        return loss
