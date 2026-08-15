@@ -65,18 +65,17 @@ class Adam(torch.optim.Optimizer):
         params: Iterable[Tensor]
         | Iterable[dict[str, Any]]
         | Iterable[tuple[str, Tensor]],
-        lr: float,
-        beta_1: float,
-        beta_2: float,
-        eps: float,
+        lr: float = 0.001,
+        betas: tuple[float, float] = (0.9, 0.999),
+        eps: float = 1e-8,
+        weight_decay: float = 0,
     ) -> None:
-        assert 0 <= beta_1 < 1 and 0 <= beta_2 < 1
 
         defaults = {
             "lr": lr,
-            "beta_1": beta_1,
-            "beta_2": beta_2,
+            "betas": betas,
             "eps": eps,
+            "weight_decay": weight_decay,
         }
         super().__init__(params, defaults)
 
@@ -87,9 +86,10 @@ class Adam(torch.optim.Optimizer):
 
         for group in self.param_groups:
             alpha: float = group["lr"]
-            beta_1: float = group["beta_1"]
-            beta_2: float = group["beta_2"]
+            betas = group["betas"]
+            beta_1, beta_2 = betas
             eps: float = group["eps"]
+            weight_decay: float = group["weight_decay"]
 
             for p in group["params"]:
                 p: torch.Tensor
@@ -97,6 +97,9 @@ class Adam(torch.optim.Optimizer):
                 if p.grad is None:
                     continue
                 g = p.grad
+
+                if weight_decay != 0.0:
+                    g += weight_decay * p
 
                 if not self.state[p]:
                     # initialize the moments.

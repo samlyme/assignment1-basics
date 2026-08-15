@@ -1,7 +1,7 @@
 import numpy
 import torch
 
-from .adapters import get_adamw_cls, run_get_lr_cosine_schedule
+from .adapters import get_adamw_cls, get_adam_cls, run_get_lr_cosine_schedule
 
 
 def _optimize(opt_class) -> torch.Tensor:
@@ -37,6 +37,21 @@ def test_adamw(numpy_snapshot):
     # expected_weights = torch.load(FIXTURES_PATH / "adamw_expected_params.pt")
     pytorch_weights = _optimize(torch.optim.AdamW)
     actual_weights = _optimize(get_adamw_cls())
+
+    # Might need to exit early if the weights match pytorch, since that should also be valid
+    matches_pytorch = torch.allclose(actual_weights, pytorch_weights, atol=1e-4)
+    if matches_pytorch:
+        return
+
+    numpy_snapshot.assert_match(
+        actual_weights,
+        atol=1e-4,
+    )
+
+
+def test_adam(numpy_snapshot):
+    pytorch_weights = _optimize(torch.optim.Adam)
+    actual_weights = _optimize(get_adam_cls())
 
     # Might need to exit early if the weights match pytorch, since that should also be valid
     matches_pytorch = torch.allclose(actual_weights, pytorch_weights, atol=1e-4)
@@ -92,4 +107,6 @@ def test_get_lr_cosine_schedule():
         )
         for it in range(25)
     ]
-    numpy.testing.assert_allclose(numpy.array(actual_lrs), numpy.array(expected_lrs))
+    numpy.testing.assert_allclose(
+        numpy.array(actual_lrs), numpy.array(expected_lrs)
+    )
