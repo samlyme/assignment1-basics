@@ -10,7 +10,7 @@ B, V, C, L, H, d_m, d_ff = sp.symbols(
     integer=True,
 )
 d_k = d_m / H
-gpt_2_xl = {V: 50257, C: 1024, L: 48, d_m: 1600, H: 25, d_ff: 4288}
+gpt_2_xl = {B: 1024, V: 50257, C: 1024, L: 48, d_m: 1600, H: 25, d_ff: 4288}
 
 # %%
 # memory usage by params and activations. Solving for max batch size.G
@@ -102,4 +102,4 @@ effective_flops_per_s = peak_flop_per_s * mfu
 
 seconds = total_flops / effective_flops_per_s
 
-print((seconds / 60 / 60).subs(gpt_2_xl).subs({B: 1024}).round(), "hours")
+print((seconds / 60 / 60).subs(gpt_2_xl).round(), "hours")
