@@ -23,7 +23,7 @@ from cs336_basics.model import (
     softmax,
     scaled_dot_product_attention,
 )
-from cs336_basics.train import cross_entropy, Adam, AdamW
+from cs336_basics.train import cross_entropy, Adam, AdamW, lr_cosine_schedule
 from cs336_basics.train_tokenizer import train_bpe
 
 
@@ -564,7 +564,13 @@ def run_get_lr_cosine_schedule(
     Returns:
         Learning rate at the given iteration under the specified schedule.
     """
-    raise NotImplementedError
+    return lr_cosine_schedule(
+        it,
+        max_learning_rate,
+        min_learning_rate,
+        warmup_iters,
+        cosine_cycle_iters,
+    )
 
 
 def run_save_checkpoint(
