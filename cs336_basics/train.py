@@ -228,3 +228,19 @@ def lr_cosine_schedule(
             (it - warmup_iters) / (cosine_cycle_iters - warmup_iters) * math.pi
         )
     ) * (max_learning_rate - min_learning_rate)
+
+
+def clip_gradient(
+    params: Iterable[torch.nn.Parameter], max_l2_norm: float, eps: float = 1e-6
+) -> None:
+    # TODO: could be optimized i think.
+    grads = [p.grad for p in params if p.grad is not None]
+    l2_norm = 0.0
+    for grad in grads:
+        l2_norm += (grad**2).sum().item()
+    l2_norm = math.sqrt(l2_norm)
+
+    if l2_norm >= max_l2_norm:
+        factor = max_l2_norm / (l2_norm + eps)
+        for grad in grads:
+            grad *= factor

@@ -23,7 +23,13 @@ from cs336_basics.model import (
     softmax,
     scaled_dot_product_attention,
 )
-from cs336_basics.train import cross_entropy, Adam, AdamW, lr_cosine_schedule
+from cs336_basics.train import (
+    cross_entropy,
+    Adam,
+    AdamW,
+    lr_cosine_schedule,
+    clip_gradient,
+)
 from cs336_basics.train_tokenizer import train_bpe
 
 
@@ -525,7 +531,7 @@ def run_gradient_clipping(
 
     The gradients of the parameters (parameter.grad) should be modified in-place.
     """
-    raise NotImplementedError
+    clip_gradient(parameters, max_l2_norm)
 
 
 def get_adamw_cls() -> Any:
