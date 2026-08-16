@@ -1,132 +1,105 @@
 # %%
-import numpy as np
-import matplotlib.pyplot as plt
+
+import sympy as sp
 
 
-# %%
-def get_flops(
-    vocab_size=50257,
-    context_length=1024,
-    num_layers=48,
-    d_model=1600,
-    num_heads=25,
-):
-    d_ff = int(8 / 3 * d_model)
-
-    assert d_model % num_heads == 0
-    d_k = d_model // num_heads
-
-    # Q, K, V, and output projections
-    kqvo_proj = 4 * 2 * context_length * d_model * d_model
-
-    # QK^T and attention @ V
-    dot_atten = (
-        num_heads
-        * 2  # QK^T and attention @ V
-        * 2  # 2 FLOPs per multiply-add
-        * context_length
-        * d_k
-        * context_length
-    )
-
-    mha_flops = num_layers * (kqvo_proj + dot_atten)
-
-    # SwiGLU: gate, up, and down projections
-    ffn_flops = num_layers * 3 * 2 * context_length * d_model * d_ff
-
-    output_proj_flops = 2 * context_length * d_model * vocab_size
-
-    total_flops = mha_flops + ffn_flops + output_proj_flops
-
-    return total_flops, mha_flops, ffn_flops, output_proj_flops
-
+sp.init_printing()
+B, V, C, L, H, d_m, d_ff = sp.symbols(
+    "B V C L H d_m d_ff",
+    positive=True,
+    integer=True,
+)
+d_k = d_m / H
+gpt_2_xl = {V: 50257, C: 1024, L: 48, d_m: 1600, H: 25, d_ff: 4288}
 
 # %%
-
-models = {
-    "Small": (12, 768, 12),
-    "Medium": (24, 1024, 16),
-    "Large": (36, 1280, 20),
-    "XL": (48, 1600, 25),
-}
-
-attention_pct = []
-ffn_pct = []
-output_pct = []
-
-for name, (layers, d_model, heads) in models.items():
-    total, mha, ffn, output = get_flops(
-        num_layers=layers,
-        d_model=d_model,
-        num_heads=heads,
-    )
-
-    attention_pct.append(100 * mha / total)
-    ffn_pct.append(100 * ffn / total)
-    output_pct.append(100 * output / total)
+# memory usage by params and activations. Solving for max batch size.G
 
 
-x = np.arange(len(models))
+def param_count():
+    input_emb = V * d_m
+    rms = d_m
 
-plt.figure(figsize=(8, 5))
+    mha = 4 * d_m**2
+    swiglu = 3 * d_m * d_ff
 
-plt.bar(x, attention_pct, label="Attention")
-plt.bar(x, ffn_pct, bottom=attention_pct, label="SwiGLU FFN")
+    output_proj = d_m * V
 
-bottom = np.array(attention_pct) + np.array(ffn_pct)
-plt.bar(x, output_pct, bottom=bottom, label="Output projection")
+    return input_emb + L * (mha + rms + swiglu + rms) + rms + output_proj
 
-plt.xticks(x, models.keys())
-plt.ylabel("Fraction of forward-pass matmul FLOPs (%)")
-plt.xlabel("GPT-2 model")
-plt.title("Distribution of Matmul FLOPs as GPT-2 Scales")
-plt.ylim(0, 100)
-plt.legend()
 
-plt.tight_layout()
-plt.show()
+def activation_count():
+    rms = B * C * d_m
+    mha = 5 * B * C * d_m + 2 * B * H * C * C
+    swiglu = 4 * B * C * d_ff + B * C * d_m
+
+    output_proj = B * C * V
+
+    ce = 2 * B * C * V + 3 * B * V
+
+    return L * (mha + rms + swiglu + rms) + output_proj + ce
+
+
+max_mem = 80
+
+P = param_count()
+
+A = activation_count()
+
+G = P
+
+O = 2 * P  # noqa: E741
+
+peak_mem = (P + A + G + O) * 4 * 1e-9  # use fp32 = 4 bytes, 1e-9 is gb.
+
+sp.solve(sp.Eq(peak_mem, max_mem), B)[0].subs(gpt_2_xl)
 
 # %%
-models = {
-    "Small": (12, 768, 12),
-    "Medium": (24, 1024, 16),
-    "Large": (36, 1280, 20),
-    "XL": (48, 1600, 25),
-}
 
-attention_pct = []
-ffn_pct = []
-output_pct = []
+# for each param, we do an update for 2 moments u, v:
+update_m = 3 * P
+update_v = 4 * P
 
-for name, (layers, d_model, heads) in models.items():
-    total, mha, ffn, output = get_flops(
-        num_layers=layers,
-        d_model=d_model,
-        num_heads=heads,
-        context_length=16384,
-    )
+# we then apply updates for the params
+weight_decay = 2 * P
+apply_moment = 5 * P
 
-    attention_pct.append(100 * mha / total)
-    ffn_pct.append(100 * ffn / total)
-    output_pct.append(100 * output / total)
+adamw_step = update_m + update_v + weight_decay + apply_moment
 
 
-x = np.arange(len(models))
+def matmul(M, K, N):
+    return 2 * M * K * N
 
-plt.figure(figsize=(8, 5))
 
-plt.bar(x, attention_pct, label="Attention")
-plt.bar(x, ffn_pct, bottom=attention_pct, label="SwiGLU FFN")
+def mha():
+    q = matmul(C, d_m, d_m)
+    k = matmul(C, d_m, d_m)
+    v = matmul(C, d_m, d_m)
+    # ignore RoPE, it is just matvec
 
-bottom = np.array(attention_pct) + np.array(ffn_pct)
-plt.bar(x, output_pct, bottom=bottom, label="Output projection")
+    attn = H * matmul(C, d_k, C)
 
-plt.xticks(x, models.keys())
-plt.ylabel("Fraction of forward-pass matmul FLOPs (%)")
-plt.xlabel("GPT-2 model")
-plt.title("Distribution of Matmul FLOPs as GPT-2 Scales with long context")
-plt.ylim(0, 100)
-plt.legend()
+    weighted_sum = matmul(C, C, d_m)
 
-plt.tight_layout()
-plt.show()
+    o = matmul(C, d_m, d_m)
+    return q + k + v + attn + weighted_sum + o
+
+
+def swiglu():
+    return 3 * matmul(C, d_m, d_ff)  # not the same shapes, but same ops
+
+
+forward_pass = B * (L * (mha() + swiglu()) + matmul(C, d_m, V))
+backward_pass = 2 * forward_pass
+
+total_flops = (forward_pass + backward_pass + adamw_step) * 400_000
+print(f"{total_flops.subs(gpt_2_xl).subs({B: 1024}) * 1e-12} teraFLOPs")
+
+peak_flop_per_s = 495 * 1e12
+mfu = 0.5
+
+effective_flops_per_s = peak_flop_per_s * mfu
+
+seconds = total_flops / effective_flops_per_s
+
+print((seconds / 60 / 60).subs(gpt_2_xl).subs({B: 1024}).round(), "hours")
