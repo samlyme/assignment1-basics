@@ -4,6 +4,8 @@ import math
 from jaxtyping import Bool, Float, Int
 from torch import Tensor
 
+from cs336_basics.nn_utils import softmax
+
 from einops import einsum, rearrange, reduce
 import torch
 
@@ -173,17 +175,6 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         return rotations[token_positions]
 
 
-def softmax(x: torch.Tensor, dim: int) -> torch.Tensor:
-    max = torch.max(x, dim=dim, keepdim=True).values
-    x = x - max
-
-    x = torch.exp(x)
-    sum = torch.sum(x, dim=dim, keepdim=True)
-
-    x = x / sum
-    return x
-
-
 def scaled_dot_product_attention(
     Q: Float[Tensor, " ... n d_k"],
     K: Float[Tensor, " ... m d_k"],
@@ -309,6 +300,8 @@ class TransformerLM(torch.nn.Module):
     ) -> None:
         super().__init__()
 
+        self.context_length = context_length
+
         self.token_embeddings = Embedding(vocab_size, d_model)
 
         self.layers = torch.nn.ModuleList(
@@ -321,6 +314,11 @@ class TransformerLM(torch.nn.Module):
     def forward(
         self, x: Int[Tensor, " batch_size sequence_length"]
     ) -> Float[Tensor, " batch_size sequence_length vocab_size"]:
+        if x.shape[-1] > self.context_length:
+            raise ValueError(
+                "Input sequence does not fit within model's context window."
+            )
+
         emb = self.token_embeddings.forward(x)
 
         z = emb

@@ -8,8 +8,10 @@ import numpy.typing as npt
 import torch
 from jaxtyping import Bool, Float, Int
 from torch import Tensor
+from torch.optim import Adam, AdamW
 
 from cs336_basics.bpe_tokenizer import Tokenizer
+from cs336_basics.nn_utils import softmax, cross_entropy, clip_gradient
 from cs336_basics.model import (
     Embedding,
     Linear,
@@ -20,20 +22,14 @@ from cs336_basics.model import (
     TransformerBlock,
     TransformerLM,
     silu,
-    softmax,
     scaled_dot_product_attention,
 )
+from cs336_basics.optimizer import lr_cosine_schedule
 from cs336_basics.train import (
-    cross_entropy,
-    Adam,
-    AdamW,
-    lr_cosine_schedule,
-    clip_gradient,
     get_batch,
-    save_checkpoint,
-    load_checkpoint,
 )
 from cs336_basics.train_bpe import train_bpe
+from cs336_basics.utils import load_checkpoint, save_checkpoint
 
 
 def run_linear(
