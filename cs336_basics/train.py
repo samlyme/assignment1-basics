@@ -3,11 +3,10 @@ import math
 from typing import Any, TypedDict
 from collections.abc import Callable
 
-from einops import einsum, rearrange, reduce
+from einops import reduce
 from torch import Tensor
 from jaxtyping import Float, Int
 import torch
-import numpy as np
 import numpy.typing as npt
 
 
