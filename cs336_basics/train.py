@@ -1,7 +1,9 @@
 from collections.abc import Iterable
 import math
+import os
 from typing import Any, TypedDict
 from collections.abc import Callable
+import typing
 
 from einops import reduce
 from torch import Tensor
@@ -259,3 +261,28 @@ def get_batch(
     batches = data[start_indices]
 
     return batches[:, :-1].to(device), batches[:, 1:].to(device)
+
+
+def save_checkpoint(
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    iteration: int,
+    out: str | os.PathLike | typing.BinaryIO | typing.IO[bytes],
+) -> None:
+    obj = {
+        "model": model.state_dict(),
+        "optimizer": optimizer.state_dict(),
+        "iteration": iteration,
+    }
+    torch.save(obj, out)
+
+
+def load_checkpoint(
+    src: str | os.PathLike | typing.BinaryIO | typing.IO[bytes],
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+) -> int:
+    obj = torch.load(src)
+    model.load_state_dict(obj["model"])
+    optimizer.load_state_dict(obj["optimizer"])
+    return obj["iteration"]
