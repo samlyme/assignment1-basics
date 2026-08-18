@@ -3,10 +3,12 @@ import math
 from typing import Any, TypedDict
 from collections.abc import Callable
 
-from einops import reduce
+from einops import einsum, rearrange, reduce
 from torch import Tensor
 from jaxtyping import Float, Int
 import torch
+import numpy as np
+import numpy.typing as npt
 
 
 def cross_entropy(
@@ -244,3 +246,17 @@ def clip_gradient(
         factor = max_l2_norm / (l2_norm + eps)
         for grad in grads:
             grad *= factor
+
+
+def get_batch(
+    dataset: npt.NDArray, batch_size: int, context_length: int, device: str
+) -> tuple[torch.Tensor, torch.Tensor]:
+    assert dataset.ndim == 1
+
+    # .from_numpy shares memory with numpy, thus it does not mess with mmap.
+    data = torch.from_numpy(dataset).unfold(0, context_length + 1, 1)
+    start_indices = torch.randint(0, data.shape[0], (batch_size,))
+
+    batches = data[start_indices]
+
+    return batches[:, :-1].to(device), batches[:, 1:].to(device)

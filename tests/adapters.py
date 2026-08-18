@@ -29,6 +29,7 @@ from cs336_basics.train import (
     AdamW,
     lr_cosine_schedule,
     clip_gradient,
+    get_batch,
 )
 from cs336_basics.train_tokenizer import train_bpe
 
@@ -480,7 +481,7 @@ def run_get_batch(
         is the sampled input sequences, and the second tuple item is the corresponding
         language modeling labels.
     """
-    raise NotImplementedError
+    return get_batch(dataset, batch_size, context_length, device)
 
 
 def run_softmax(
