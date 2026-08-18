@@ -33,7 +33,7 @@ from cs336_basics.train import (
     save_checkpoint,
     load_checkpoint,
 )
-from cs336_basics.train_tokenizer import train_bpe
+from cs336_basics.train_bpe import train_bpe
 
 
 def run_linear(

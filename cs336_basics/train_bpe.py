@@ -44,7 +44,9 @@ def init_stats(
     return token_vocab, token_pair_counts, token_pair_in_pretokens
 
 
-def merge_pair(word: Word, to_merge: TokenIdPair, merged_token_id: TokenId) -> Word:
+def merge_pair(
+    word: Word, to_merge: TokenIdPair, merged_token_id: TokenId
+) -> Word:
     out: list[TokenId] = []
     i = 0
     while i < len(word) - 1:
@@ -66,10 +68,16 @@ type PretokenVocabDiff = dict[PretokenId, tuple[Word, Word]]
 
 
 def update_pretoken_vocab(
-    pretoken_vocab: PretokenVocab, affected_pretoken_ids: set[PretokenId], to_merge: TokenIdPair, new_token_id: TokenId
+    pretoken_vocab: PretokenVocab,
+    affected_pretoken_ids: set[PretokenId],
+    to_merge: TokenIdPair,
+    new_token_id: TokenId,
 ) -> PretokenVocabDiff:
     pretoken_vocab_diff = {
-        pretoken_id: (pretoken_vocab[pretoken_id], merge_pair(pretoken_vocab[pretoken_id], to_merge, new_token_id))
+        pretoken_id: (
+            pretoken_vocab[pretoken_id],
+            merge_pair(pretoken_vocab[pretoken_id], to_merge, new_token_id),
+        )
         for pretoken_id in affected_pretoken_ids
     }
     for id, (old, new) in pretoken_vocab_diff.items():
@@ -80,7 +88,8 @@ def update_pretoken_vocab(
 
 
 def token_pair_counts_delta(
-    pretoken_repr_old_to_new: dict[PretokenId, tuple[Word, Word]], pretoken_id_counts: PretokenIdCounts
+    pretoken_repr_old_to_new: dict[PretokenId, tuple[Word, Word]],
+    pretoken_id_counts: PretokenIdCounts,
 ) -> TokenPairCounts:
     old: Counter[TokenIdPair] = Counter()
     new: Counter[TokenIdPair] = Counter()
@@ -152,26 +161,38 @@ def train_bpe(
     assert len(pretoken_vocab) == len(pretoken_id_counts)
     assert len(pretoken_vocab) > 0
 
-    token_vocab, token_pair_counts, token_pair_from = init_stats(pretoken_vocab, pretoken_id_counts)
+    token_vocab, token_pair_counts, token_pair_from = init_stats(
+        pretoken_vocab, pretoken_id_counts
+    )
     assert all(bytes([k]) == v for k, v in token_vocab.items())
     assert len(token_vocab) < vocab_size
 
     merges: list[tuple[bytes, bytes]] = []
     while len(token_vocab) < vocab_size - len(special_tokens):
         to_merge, _count = max(
-            token_pair_counts.items(), key=lambda item: (item[1], (token_vocab[item[0][0]], token_vocab[item[0][1]]))
+            token_pair_counts.items(),
+            key=lambda item: (
+                item[1],
+                (token_vocab[item[0][0]], token_vocab[item[0][1]]),
+            ),
         )
         merges.append((token_vocab[to_merge[0]], token_vocab[to_merge[1]]))
 
         new_token_id = len(token_vocab)
-        token_vocab[new_token_id] = token_vocab[to_merge[0]] + token_vocab[to_merge[1]]
+        token_vocab[new_token_id] = (
+            token_vocab[to_merge[0]] + token_vocab[to_merge[1]]
+        )
 
         affected_pretoken_ids = token_pair_from[to_merge]
 
         # Apply updates
-        pretoken_vocab_diff = update_pretoken_vocab(pretoken_vocab, affected_pretoken_ids, to_merge, new_token_id)
+        pretoken_vocab_diff = update_pretoken_vocab(
+            pretoken_vocab, affected_pretoken_ids, to_merge, new_token_id
+        )
 
-        update_token_pair_counts(token_pair_counts, pretoken_id_counts, pretoken_vocab_diff)
+        update_token_pair_counts(
+            token_pair_counts, pretoken_id_counts, pretoken_vocab_diff
+        )
 
         update_token_pair_from(token_pair_from, pretoken_vocab_diff)
 
@@ -188,8 +209,15 @@ def main():
         type=str,
         help="Path to the file to read",
     )
-    parser.add_argument("--vocab-size", type=int, default=1000, help="Final vocab size")
-    parser.add_argument("--workers", type=int, default=4, help="Number of CPU's for pretokenization")
+    parser.add_argument(
+        "--vocab-size", type=int, default=1000, help="Final vocab size"
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=4,
+        help="Number of CPU's for pretokenization",
+    )
     parser.add_argument(
         "--out-dir",
         type=Path,
@@ -199,7 +227,9 @@ def main():
 
     args = parser.parse_args()
 
-    vocab, merges = train_bpe(args.input_path, args.vocab_size, ["<|endoftext|>"])
+    vocab, merges = train_bpe(
+        args.input_path, args.vocab_size, ["<|endoftext|>"]
+    )
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
