@@ -11,6 +11,9 @@ from cs336_basics.nn_utils import cross_entropy
 from cs336_basics.optimizer import AdamW
 from cs336_basics.utils import get_batch, load_checkpoint, save_checkpoint
 
+import sys
+
+
 # Define some hparams
 MODEL_CONFIGS = {
     "toy": {
@@ -41,7 +44,7 @@ OPTIM_CONFIGS = {
         "weight_decay": 0,
     },
     "faster": {
-        "lr": 1e-3,
+        "lr": 2e-3,
         "betas": (0.9, 0.999),
         "weight_decay": 0,
     },
@@ -60,14 +63,14 @@ def main():
         "--val",
         type=str,
         help="Path to tokenized validation data",
-        default="data/ts-val-ts-10000.npy",
+        default="data/ts-valid-ts-10000.npy",
     )
 
     parser.add_argument("--model-config", type=str, default="toy")
-    parser.add_argument("--optim-config", type=str, default="default")
+    parser.add_argument("--optim-config", type=str, default="fast")
 
     parser.add_argument("--batch-size", type=str, default=32)
-    parser.add_argument("--steps", type=int, default=5000)
+    parser.add_argument("--steps", type=int, default=40000)
     parser.add_argument("--total-tokens", type=int)
 
     parser.add_argument("--log-freq", type=int, default=100)
@@ -80,6 +83,18 @@ def main():
     parser.add_argument("--out-dir", type=str)
 
     args = parser.parse_args()
+
+    if args.out_dir:
+        out_dir = Path(args.out_dir)
+    else:
+        out_dir = Path(f"out/{args.model_config}-{args.optim_config}")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Save models and logs to: {out_dir}")
+
+    # NOTE: this is cursed. Implicitly redirecting everything into that log.
+    log = open(out_dir / "train.log", "a", buffering=1)
+    sys.stdout = log
+    sys.stderr = log
 
     if args.device:
         device = torch.device(args.device)
@@ -95,11 +110,6 @@ def main():
         device = torch.device("cpu")
 
     print(f"USING DEVICE: {device}")
-
-    out_dir = Path(args.out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    print(f"Save models to: {out_dir}")
-
     # use mmap_mode="c" because it means "copy on write".
     # This way, we garuantee that the dataset is unharmed, but we get rid of
     # that warning.
