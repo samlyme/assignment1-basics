@@ -412,9 +412,14 @@ def run_transformer_lm(
         next-word distribution for each token.
     """
     d_k = d_model // num_heads
-    rope = RotaryPositionalEmbedding(rope_theta, d_k, context_length)
     model = TransformerLM(
-        vocab_size, d_model, num_heads, d_ff, context_length, num_layers, rope
+        vocab_size,
+        d_model,
+        num_heads,
+        d_ff,
+        context_length,
+        num_layers,
+        {"d_k": d_k, "max_seq_len": context_length, "theta": rope_theta},
     )
     model.load_state_dict(weights)
     return model.forward(in_indices)

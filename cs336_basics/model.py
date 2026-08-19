@@ -9,6 +9,8 @@ from cs336_basics.nn_utils import softmax
 from einops import einsum, rearrange, reduce
 import torch
 
+from cs336_basics.utils import RotaryPositionalEmbeddingConfig
+
 
 class Linear(torch.nn.Module):
     def __init__(
@@ -297,7 +299,7 @@ class TransformerLM(torch.nn.Module):
         d_ff: int,
         context_length: int,
         num_layers: int,
-        positional_embedding: torch.nn.Module,
+        rope_config: RotaryPositionalEmbeddingConfig,
     ) -> None:
         super().__init__()
 
@@ -307,8 +309,9 @@ class TransformerLM(torch.nn.Module):
 
         # NOTE: assume that positional embedding has no params, and can share
         # instance across layers.
+        rope = RotaryPositionalEmbedding(**rope_config)
         self.layers = torch.nn.ModuleList(
-            TransformerBlock(d_model, num_heads, d_ff, positional_embedding)
+            TransformerBlock(d_model, num_heads, d_ff, rope)
             for i in range(num_layers)
         )
         self.ln_final = RMSNorm(d_model)
