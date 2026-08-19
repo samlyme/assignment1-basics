@@ -141,6 +141,7 @@ class RotaryPositionalEmbedding(torch.nn.Module):
             denom = self.big_theta**p
             return i / denom
 
+        # TODO: vectorize this.
         for position in range(max_seq_len):
             for ki in range(K):
                 theta_ik = get_theta(position, ki)
@@ -304,6 +305,8 @@ class TransformerLM(torch.nn.Module):
 
         self.token_embeddings = Embedding(vocab_size, d_model)
 
+        # NOTE: assume that positional embedding has no params, and can share
+        # instance across layers.
         self.layers = torch.nn.ModuleList(
             TransformerBlock(d_model, num_heads, d_ff, positional_embedding)
             for i in range(num_layers)
