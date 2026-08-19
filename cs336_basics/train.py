@@ -28,6 +28,8 @@ def main():
     parser.add_argument("--context-length", type=int, default=256)
 
     parser.add_argument("--steps", type=int, default=5000)
+    parser.add_argument("--log-freq", type=int, default=100)
+    parser.add_argument("--saves", type=int, default=5)
 
     parser.add_argument("--checkpoint", type=str)
 
@@ -54,6 +56,7 @@ def main():
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Save models to: {out_dir}")
 
     # use mmap_mode="c" because it means "copy on write".
     # This way, we garuantee that the dataset is unharmed, but we get rid of
@@ -83,6 +86,10 @@ def main():
     if args.checkpoint is not None:
         start_iter = load_checkpoint(args.checkpoint, model, optimizer)
 
+    LOG_FREQ = args.log_freq
+    SAVE_FREQ = args.steps // args.saves
+    print(f"{LOG_FREQ=}, {SAVE_FREQ=}")
+    print("=======================================")
     for iteration in range(start_iter, args.steps):
         x, y = get_batch(dataset, args.batch_size, args.context_length, device)
 
@@ -96,7 +103,7 @@ def main():
         optimizer.step()
         optimizer.zero_grad()
 
-        if iteration % 100 == 0:
+        if iteration % LOG_FREQ == 0:
             train_loss = loss.item()
             x_val, y_val = get_batch(
                 val_dataset, args.batch_size, args.context_length, device
@@ -109,7 +116,8 @@ def main():
                 f"{time.strftime('%H:%M:%S')}, {iteration=}, {train_loss=:.3f}, {val_loss=:.3f}"
             )
 
-        if iteration % 1000 == 0:
+        if iteration % SAVE_FREQ == 0:
+            # TODO: add full val set loss here.
             save_checkpoint(
                 model, optimizer, iteration, out_dir / f"{iteration}.pt"
             )
