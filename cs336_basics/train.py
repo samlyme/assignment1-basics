@@ -1,3 +1,4 @@
+from datetime import datetime
 from pathlib import Path
 import torch
 
@@ -55,6 +56,8 @@ def main():
         rope_theta=10000,
     ).to(device)
 
+    model.compile()
+
     # TODO: load optimizer
     optimizer = AdamW(
         model.parameters(), lr=0.001, betas=(0.9, 0.999), weight_decay=0
@@ -64,7 +67,6 @@ def main():
     if args.checkpoint is not None:
         start_iter = load_checkpoint(args.checkpoint, model, optimizer)
 
-    # overfit test.
     for iteration in range(start_iter, args.steps):
         x, y = get_batch(
             dataset, args.batch_size, args.context_length, args.device
@@ -88,12 +90,29 @@ def main():
             x_val = x_val.long()
             y_val = y_val.long()
             val_loss = cross_entropy(model(x_val), y_val).item()
-            print(f"{iteration=}, {train_loss=:.3f}, {val_loss=:.3f}")
+            time = datetime.now()
+            print(
+                f"{time.strftime('%H:%M:%S')}, {iteration=}, {train_loss=:.3f}, {val_loss=:.3f}"
+            )
 
         if iteration % 1000 == 0:
             save_checkpoint(
                 model, optimizer, iteration, out_dir / f"{iteration}.pt"
             )
+
+    train_loss = loss.item()
+    x_val, y_val = get_batch(
+        val_dataset, args.batch_size, args.context_length, args.device
+    )
+    x_val = x_val.long()
+    y_val = y_val.long()
+    val_loss = cross_entropy(model(x_val), y_val).item()
+    print(
+        f"{time.strftime('%H:%M:%S')}, {iteration=}, {train_loss=:.3f}, {val_loss=:.3f}, final"
+    )
+    save_checkpoint(
+        model, optimizer, iteration, out_dir / f"{iteration}-final.pt"
+    )
 
 
 if __name__ == "__main__":
