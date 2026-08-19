@@ -37,13 +37,29 @@ def main():
 
     args = parser.parse_args()
 
-    device = torch.device(args.device)
+    if args.device:
+        device = torch.device(args.device)
+    elif torch.cuda.is_available():
+        device = torch.device("cuda")
+        # pytorch warning said this is good :D
+        torch.set_float32_matmul_precision("high")
+    elif torch.mps.is_available():
+        device = torch.device("mps")
+        # DO NOT USE `torch.set_float32_matmul_precision("high")` here.
+        # assignment claims this causes silent failures.
+    else:
+        device = torch.device("cpu")
+
+    print(f"USING DEVICE: {device}")
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    dataset = np.load(args.train, mmap_mode="r")
-    val_dataset = np.load(args.val, mmap_mode="r")
+    # use mmap_mode="c" because it means "copy on write".
+    # This way, we garuantee that the dataset is unharmed, but we get rid of
+    # that warning.
+    dataset = np.load(args.train, mmap_mode="c")
+    val_dataset = np.load(args.val, mmap_mode="c")
 
     # TODO: load model config from arg
     model = TransformerLM(
@@ -68,9 +84,7 @@ def main():
         start_iter = load_checkpoint(args.checkpoint, model, optimizer)
 
     for iteration in range(start_iter, args.steps):
-        x, y = get_batch(
-            dataset, args.batch_size, args.context_length, args.device
-        )
+        x, y = get_batch(dataset, args.batch_size, args.context_length, device)
 
         x = x.long()
         y = y.long()
@@ -85,7 +99,7 @@ def main():
         if iteration % 100 == 0:
             train_loss = loss.item()
             x_val, y_val = get_batch(
-                val_dataset, args.batch_size, args.context_length, args.device
+                val_dataset, args.batch_size, args.context_length, device
             )
             x_val = x_val.long()
             y_val = y_val.long()
@@ -102,7 +116,7 @@ def main():
 
     train_loss = loss.item()
     x_val, y_val = get_batch(
-        val_dataset, args.batch_size, args.context_length, args.device
+        val_dataset, args.batch_size, args.context_length, device
     )
     x_val = x_val.long()
     y_val = y_val.long()

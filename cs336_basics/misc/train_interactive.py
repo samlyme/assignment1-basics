@@ -8,6 +8,11 @@ from cs336_basics.optimizer import AdamW
 from cs336_basics.utils import get_batch
 
 # %%
+
+device = torch.device("cuda")
+print(device)
+
+# %%
 dataset = np.load(
     "/Users/sam/Documents/code/stanford-cs336/assignment1-basics/data/TinyStoriesV2-GPT4-valid-ts.npy",
     mmap_mode="r",

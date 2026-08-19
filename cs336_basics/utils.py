@@ -18,7 +18,10 @@ class TransformerLMConfig(typing.TypedDict):
 
 
 def get_batch(
-    dataset: npt.NDArray, batch_size: int, context_length: int, device: str
+    dataset: npt.NDArray,
+    batch_size: int,
+    context_length: int,
+    device: str | torch.device,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     assert dataset.ndim == 1
 
