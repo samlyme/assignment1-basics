@@ -1,4 +1,5 @@
 from pathlib import Path
+import torch
 
 import numpy as np
 import argparse
@@ -23,6 +24,7 @@ def main():
     )
 
     parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument("--context-length", type=int, default=256)
 
     parser.add_argument("--steps", type=int, default=40000)
 
@@ -31,6 +33,8 @@ def main():
     parser.add_argument("--out-dir", type=str)
 
     args = parser.parse_args()
+
+    device = torch.device(args.device)
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -47,7 +51,7 @@ def main():
         d_ff=1344,
         context_length=256,
         rope_theta=10000,
-    )
+    ).to(device)
 
     # TODO: load optimizer
     optimizer = AdamW(
@@ -75,6 +79,8 @@ def main():
             x_val, y_val = get_batch(
                 val_dataset, args.batch_size, args.context_length, args.device
             )
+            x_val = x_val.long()
+            y_val = y_val.long()
             val_loss = cross_entropy(model(x_val), y_val).item()
             print(f"{iteration=}, {train_loss=:.3f}, {val_loss=:.3f}")
 
