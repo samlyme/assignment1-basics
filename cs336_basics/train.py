@@ -89,7 +89,7 @@ def main():
     LOG_FREQ = args.log_freq
     SAVE_FREQ = args.steps // args.saves
     print(f"{LOG_FREQ=}, {SAVE_FREQ=}")
-    print("=======================================")
+    print("~" * 32)
     for iteration in range(start_iter, args.steps):
         x, y = get_batch(dataset, args.batch_size, args.context_length, device)
 
