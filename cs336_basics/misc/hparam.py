@@ -12,11 +12,11 @@ import matplotlib.pyplot as plt
 
 # %%
 
-device = torch.device("cuda:0")
+device = torch.device("cuda")
 
 dataset = np.load(
-    "/home/sam/Documents/stanford-cs336/assignment1-basics/data/TinyStoriesV2-GPT4-valid-ts.npy",
-    mmap_mode="r",
+    "/home/sam/Documents/stanford-cs336/assignment1-basics/data/ts-valid-ts-10000.npy",
+    mmap_mode="c",
 )
 
 # %%
@@ -24,11 +24,12 @@ dataset = np.load(
 min_lr = 1e-5
 max_lr = 1e-2
 steps = 100
-batch_sizes = [32, 64, 126, 190]
+batch_sizes = [32, 64, 128, 190]
 
 res = {}
 
 for batch_size in batch_sizes:
+    print("using batch_size", batch_size)
     model = TransformerLM(
         vocab_size=10000,
         d_model=512,
@@ -87,3 +88,12 @@ plt.title("Learning Rate Sweep by Batch Size")
 plt.legend()
 plt.grid(True, alpha=0.3)
 plt.show()
+
+
+# %%
+candidate_lrs = [
+    3e-4,
+    6e-4,
+    1e-3,
+    2e-3,
+]
