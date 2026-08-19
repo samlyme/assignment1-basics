@@ -11,6 +11,7 @@ B, V, C, L, H, d_m, d_ff = sp.symbols(
 )
 d_k = d_m / H
 gpt_2_xl = {B: 1024, V: 50257, C: 1024, L: 48, d_m: 1600, H: 25, d_ff: 4288}
+toy = {V: 10000, C: 256, L: 4, d_m: 512, H: 16, d_ff: 1344}
 
 # %%
 # memory usage by params and activations. Solving for max batch size.G
@@ -51,8 +52,9 @@ G = P
 O = 2 * P  # noqa: E741
 
 peak_mem = (P + A + G + O) * 4 * 1e-9  # use fp32 = 4 bytes, 1e-9 is gb.
-
-sp.solve(sp.Eq(peak_mem, max_mem), B)[0].subs(gpt_2_xl)
+peak_mem.subs(toy)
+# %%
+sp.solve(sp.Eq(peak_mem, max_mem), B)[0].subs(toy)
 
 # %%
 
