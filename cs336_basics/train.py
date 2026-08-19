@@ -7,7 +7,7 @@ import argparse
 from cs336_basics.model import TransformerLM
 from cs336_basics.nn_utils import cross_entropy
 from cs336_basics.optimizer import AdamW
-from cs336_basics.utils import get_batch, save_checkpoint
+from cs336_basics.utils import get_batch, load_checkpoint, save_checkpoint
 
 
 def main():
@@ -27,6 +27,8 @@ def main():
     parser.add_argument("--context-length", type=int, default=256)
 
     parser.add_argument("--steps", type=int, default=40000)
+
+    parser.add_argument("--checkpoint", type=str)
 
     parser.add_argument("--device", type=str)
 
@@ -58,8 +60,12 @@ def main():
         model.parameters(), lr=0.001, betas=(0.9, 0.999), weight_decay=0
     )
 
+    start_iter = 0
+    if args.checkpoint is not None:
+        start_iter = load_checkpoint(args.checkpoint, model, optimizer)
+
     # overfit test.
-    for iteration in range(args.steps):
+    for iteration in range(start_iter, args.steps):
         x, y = get_batch(
             dataset, args.batch_size, args.context_length, args.device
         )
@@ -74,7 +80,7 @@ def main():
         optimizer.step()
         optimizer.zero_grad()
 
-        if iteration % 100 == 0:
+        if iteration % 1000 == 0:
             train_loss = loss.item()
             x_val, y_val = get_batch(
                 val_dataset, args.batch_size, args.context_length, args.device
