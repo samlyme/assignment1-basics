@@ -24,10 +24,17 @@ def generate_text(
         logits = model(torch.tensor(tokens, dtype=torch.long, device=device))[
             -1
         ]
-        probs = softmax(logits, dim=-1)
 
-        next_token = torch.multinomial(probs, num_samples=1)
+        if temperature > 0:
+            probs = softmax(logits / temperature, dim=-1)
+            next_token = torch.multinomial(probs, num_samples=1)
+        else:
+            next_token = torch.argmax(logits, dim=-1, keepdim=True)
+
         tokens.append(int(next_token))
+
+        if tokenizer.decode(tokens[-1:]) == "<|endoftext|>":
+            break
 
     return tokenizer.decode(tokens)
 
@@ -46,6 +53,8 @@ if __name__ == "__main__":
 
     parser.add_argument("--vocab-filepath", type=str)  # tokenizer configs
     parser.add_argument("--merges-filepath", type=str)
+
+    parser.add_argument("--temperature", type=float, default=1.0)
 
     parser.add_argument("--device", type=str)
 
@@ -73,4 +82,12 @@ if __name__ == "__main__":
     )
     start_iter = load_checkpoint(args.checkpoint, model, optimizer)
 
-    print(generate_text(model, tokenizer, args.prompt, device=device))
+    print(
+        generate_text(
+            model,
+            tokenizer,
+            args.prompt,
+            temperature=args.temperature,
+            device=device,
+        )
+    )
