@@ -1,0 +1,1 @@
+PYTHONUNBUFFERED=1 uv run cs336_basics/train.py --optim-config slower --out-dir out/slower> train.log 2>&1
