@@ -26,7 +26,7 @@ def main():
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--context-length", type=int, default=256)
 
-    parser.add_argument("--steps", type=int, default=40000)
+    parser.add_argument("--steps", type=int, default=5000)
 
     parser.add_argument("--checkpoint", type=str)
 
@@ -80,7 +80,7 @@ def main():
         optimizer.step()
         optimizer.zero_grad()
 
-        if iteration % 1000 == 0:
+        if iteration % 100 == 0:
             train_loss = loss.item()
             x_val, y_val = get_batch(
                 val_dataset, args.batch_size, args.context_length, args.device
@@ -90,6 +90,7 @@ def main():
             val_loss = cross_entropy(model(x_val), y_val).item()
             print(f"{iteration=}, {train_loss=:.3f}, {val_loss=:.3f}")
 
+        if iteration % 1000 == 0:
             save_checkpoint(
                 model, optimizer, iteration, out_dir / f"{iteration}.pt"
             )

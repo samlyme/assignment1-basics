@@ -51,8 +51,17 @@ if __name__ == "__main__":
     # load from training checkpoint
     parser.add_argument("--checkpoint", type=str)
 
-    parser.add_argument("--vocab-filepath", type=str)  # tokenizer configs
-    parser.add_argument("--merges-filepath", type=str)
+    # tokenizer configs
+    parser.add_argument(
+        "--vocab-filepath",
+        type=str,
+        default="out/bpe_params_ts-train/vocab.pkl",
+    )
+    parser.add_argument(
+        "--merges-filepath",
+        type=str,
+        default="out/bpe_params_ts-train/merges.pkl",
+    )
 
     parser.add_argument("--temperature", type=float, default=1.0)
 
