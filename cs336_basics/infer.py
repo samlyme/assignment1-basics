@@ -16,16 +16,17 @@ def generate_text(
     max_tokens: int = 128,
     temperature: float = 1.0,
     device: torch.device | None = None,
-):
+) -> str:
     tokens = tokenizer.encode(prompt)
 
     # assume that we dont have batched inputs yet
     for i in range(max_tokens):
-        probs = softmax(
-            model(torch.tensor(tokens, dtype=torch.long, device=device)), dim=1
-        )
+        logits = model(torch.tensor(tokens, dtype=torch.long, device=device))[
+            -1
+        ]
+        probs = softmax(logits, dim=-1)
 
-        next_token = torch.multinomial(probs, num_samples=1).item()
+        next_token = torch.multinomial(probs, num_samples=1)
         tokens.append(int(next_token))
 
     return tokenizer.decode(tokens)
@@ -38,13 +39,13 @@ def main():
 if __name__ == "__main__":
     parser = ArgumentParser()
 
-    parser.add_argument("prompt", type=str, default="<|endoftext|>")
+    parser.add_argument("prompt", type=str)
 
     # load from training checkpoint
     parser.add_argument("--checkpoint", type=str)
 
-    parser.add_argument("vocab_filepath", type=str)  # tokenizer configs
-    parser.add_argument("merges_filepath", type=str)
+    parser.add_argument("--vocab-filepath", type=str)  # tokenizer configs
+    parser.add_argument("--merges-filepath", type=str)
 
     parser.add_argument("--device", type=str)
 
@@ -72,4 +73,4 @@ if __name__ == "__main__":
     )
     start_iter = load_checkpoint(args.checkpoint, model, optimizer)
 
-    generate_text(model, tokenizer, args.prompt, device=device)
+    print(generate_text(model, tokenizer, args.prompt, device=device))
