@@ -9,8 +9,6 @@ from cs336_basics.nn_utils import softmax
 from einops import einsum, rearrange, reduce
 import torch
 
-from cs336_basics.utils import RotaryPositionalEmbeddingConfig
-
 
 class Linear(torch.nn.Module):
     def __init__(
@@ -299,8 +297,13 @@ class TransformerLM(torch.nn.Module):
         d_ff: int,
         context_length: int,
         num_layers: int,
-        rope_config: RotaryPositionalEmbeddingConfig,
+        rope_theta: float,
     ) -> None:
+        if d_model % num_heads != 0:
+            raise ValueError(
+                f"Invalid hyperparameter: {d_model=} must be divisible by {num_heads=}"
+            )
+
         super().__init__()
 
         self.context_length = context_length
@@ -309,11 +312,13 @@ class TransformerLM(torch.nn.Module):
 
         # NOTE: assume that positional embedding has no params, and can share
         # instance across layers.
-        rope = RotaryPositionalEmbedding(**rope_config)
+        d_k = d_model // num_heads
+        rope = RotaryPositionalEmbedding(rope_theta, d_k, context_length)
         self.layers = torch.nn.ModuleList(
             TransformerBlock(d_model, num_heads, d_ff, rope)
             for i in range(num_layers)
         )
+
         self.ln_final = RMSNorm(d_model)
         self.lm_head = Linear(d_model, vocab_size)
 

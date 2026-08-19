@@ -411,7 +411,6 @@ def run_transformer_lm(
         Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized
         next-word distribution for each token.
     """
-    d_k = d_model // num_heads
     model = TransformerLM(
         vocab_size,
         d_model,
@@ -419,7 +418,7 @@ def run_transformer_lm(
         d_ff,
         context_length,
         num_layers,
-        {"d_k": d_k, "max_seq_len": context_length, "theta": rope_theta},
+        rope_theta,
     )
     model.load_state_dict(weights)
     return model.forward(in_indices)

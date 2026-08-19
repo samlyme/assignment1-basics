@@ -7,13 +7,6 @@ import numpy.typing as npt
 
 
 @dataclass(frozen=True)
-class RotaryPositionalEmbeddingConfig(typing.TypedDict):
-    theta: float
-    d_k: int
-    max_seq_len: int
-
-
-@dataclass(frozen=True)
 class TransformerLMConfig(typing.TypedDict):
     vocab_size: int
     d_model: int
@@ -21,7 +14,7 @@ class TransformerLMConfig(typing.TypedDict):
     d_ff: int
     context_length: int
     num_layers: int
-    rope_config: RotaryPositionalEmbeddingConfig
+    rope_theta: float
 
 
 def get_batch(
