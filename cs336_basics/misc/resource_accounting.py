@@ -41,7 +41,7 @@ def activation_count():
     return L * (mha + rms + swiglu + rms) + output_proj + ce
 
 
-max_mem = 80
+max_mem = 24
 
 P = param_count()
 
