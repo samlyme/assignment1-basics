@@ -1,5 +1,4 @@
 from datetime import datetime
-from math import ceil
 from pathlib import Path
 import torch
 
@@ -24,17 +23,44 @@ MODEL_CONFIGS = {
         "d_ff": 1344,
         "context_length": 256,
         "rope_theta": 10000,
-    }
+    },
+    "toy-long-context": {
+        "vocab_size": 10000,
+        "d_model": 512,
+        "num_layers": 4,
+        "num_heads": 16,
+        "d_ff": 1344,
+        "context_length": 512,
+        "rope_theta": 10000,
+    },
+    "small": {
+        "vocab_size": 10000,
+        "d_model": 768,
+        "num_layers": 4,
+        "num_heads": 16,
+        "d_ff": 2048,
+        "context_length": 256,
+        "rope_theta": 10000,
+    },
+    "small-long-context": {
+        "vocab_size": 10000,
+        "d_model": 768,
+        "num_layers": 4,
+        "num_heads": 16,
+        "d_ff": 2048,
+        "context_length": 512,
+        "rope_theta": 10000,
+    },
 }
 
 OPTIM_CONFIGS = {
     "slower": {
-        "lr": 3e-4,
+        "lr": 1.5e-4,
         "betas": (0.9, 0.999),
         "weight_decay": 0,
     },
     "slow": {
-        "lr": 6e-4,
+        "lr": 3e-4,
         "betas": (0.9, 0.999),
         "weight_decay": 0,
     },
@@ -43,7 +69,7 @@ OPTIM_CONFIGS = {
         "betas": (0.9, 0.999),
         "weight_decay": 0,
     },
-    "faster": {
+    "faster": {  # most of the time unstable
         "lr": 2e-3,
         "betas": (0.9, 0.999),
         "weight_decay": 0,
@@ -67,9 +93,9 @@ def main():
     )
 
     parser.add_argument("--model-config", type=str, default="toy")
-    parser.add_argument("--optim-config", type=str, default="fast")
+    parser.add_argument("--optim-config", type=str, default="slow")
 
-    parser.add_argument("--batch-size", type=str, default=32)
+    parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--steps", type=int, default=40000)
     parser.add_argument("--total-tokens", type=int)
 
@@ -87,7 +113,9 @@ def main():
     if args.out_dir:
         out_dir = Path(args.out_dir)
     else:
-        out_dir = Path(f"out/{args.model_config}-{args.optim_config}")
+        out_dir = Path(
+            f"out/{args.model_config}-{args.optim_config}-{args.batch_size}"
+        )
     out_dir.mkdir(parents=True, exist_ok=True)
     print(f"Save models and logs to: {out_dir}")
 
@@ -133,9 +161,8 @@ def main():
 
     train_configs = {"batch_size": args.batch_size, "steps": args.steps}
     if args.total_tokens:
-        train_configs["steps"] = ceil(
-            args.total_tokens
-            / (train_configs["batch_size"] * model_config["context_length"])
+        train_configs["steps"] = args.total_tokens // (
+            train_configs["batch_size"] * model_config["context_length"]
         )
         print(
             "INFO: Using total tokens processed to override number of training steps"
