@@ -155,14 +155,11 @@ def main():
     optim = AdamW(model.parameters(), **optim_config)
     print(f"Optim configs: {optim_config}")
 
-    start_iter = 0
-    if args.checkpoint is not None:
-        start_iter = load_checkpoint(args.checkpoint, model, optim)
-
+    context_length = model_config["context_length"]
     train_configs = {"batch_size": args.batch_size, "steps": args.steps}
     if args.total_tokens:
         train_configs["steps"] = args.total_tokens // (
-            train_configs["batch_size"] * model_config["context_length"]
+            train_configs["batch_size"] * context_length
         )
         print(
             "INFO: Using total tokens processed to override number of training steps"
@@ -170,13 +167,15 @@ def main():
     print(f"Train configs: {train_configs}")
 
     LOG_FREQ = args.log_freq
-    SAVE_FREQ = args.steps // args.saves
+    SAVE_FREQ = train_configs["steps"] // args.saves
     print(f"{LOG_FREQ=}, {SAVE_FREQ=}")
     print("~" * 32)
+
+    start_iter = 0
+    if args.checkpoint is not None:
+        start_iter = load_checkpoint(args.checkpoint, model, optim)
     for iteration in range(start_iter, args.steps):
-        x, y = get_batch(
-            dataset, args.batch_size, model_config["context_length"], device
-        )
+        x, y = get_batch(dataset, args.batch_size, context_length, device)
 
         x = x.long()
         y = y.long()
@@ -193,7 +192,7 @@ def main():
             x_val, y_val = get_batch(
                 val_dataset,
                 args.batch_size,
-                model_config["context_length"],
+                context_length,
                 device,
             )
             x_val = x_val.long()
@@ -212,7 +211,7 @@ def main():
 
     train_loss = loss.item()
     x_val, y_val = get_batch(
-        val_dataset, args.batch_size, model_config["context_length"], device
+        val_dataset, args.batch_size, context_length, device
     )
     x_val = x_val.long()
     y_val = y_val.long()
