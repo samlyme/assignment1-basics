@@ -12,6 +12,7 @@ B, V, C, L, H, d_m, d_ff = sp.symbols(
 d_k = d_m / H
 gpt_2_xl = {B: 1024, V: 50257, C: 1024, L: 48, d_m: 1600, H: 25, d_ff: 4288}
 toy = {V: 10000, C: 256, L: 4, d_m: 512, H: 16, d_ff: 1344}
+small = {V: 10000, C: 256, L: 4, d_m: 768, H: 16, d_ff: 2048}
 
 # %%
 # memory usage by params and activations. Solving for max batch size.G
@@ -41,7 +42,7 @@ def activation_count():
     return L * (mha + rms + swiglu + rms) + output_proj + ce
 
 
-max_mem = 24
+hbm_3090_gb = 23.5
 
 P = param_count()
 
@@ -52,9 +53,9 @@ G = P
 O = 2 * P  # noqa: E741
 
 peak_mem = (P + A + G + O) * 4 * 1e-9  # use fp32 = 4 bytes, 1e-9 is gb.
-peak_mem.subs(toy)
+peak_mem.subs(toy), peak_mem.subs(small)
 # %%
-sp.solve(sp.Eq(peak_mem, max_mem), B)[0].subs(toy)
+sp.solve(sp.Eq(peak_mem, hbm_3090_gb), B)[0].subs(small)
 
 # %%
 

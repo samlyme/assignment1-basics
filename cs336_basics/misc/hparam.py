@@ -7,6 +7,7 @@ from cs336_basics.model import TransformerLM
 from cs336_basics.nn_utils import clip_gradient, cross_entropy
 from cs336_basics.optimizer import AdamW
 from cs336_basics.utils import get_batch
+from cs336_basics.train import MODEL_CONFIGS
 
 import matplotlib.pyplot as plt
 
@@ -15,7 +16,7 @@ import matplotlib.pyplot as plt
 device = torch.device("cuda")
 
 dataset = np.load(
-    "/home/sam/Documents/stanford-cs336/assignment1-basics/data/ts-valid-ts-10000.npy",
+    "../../data/ts-valid-ts-10000.npy",
     mmap_mode="c",
 )
 
@@ -24,21 +25,13 @@ dataset = np.load(
 min_lr = 1e-5
 max_lr = 1e-2
 steps = 100
-batch_sizes = [32, 64, 128, 190]
+batch_sizes = [32, 64, 128]
 
 res = {}
 
 for batch_size in batch_sizes:
     print("using batch_size", batch_size)
-    model = TransformerLM(
-        vocab_size=10000,
-        d_model=512,
-        num_layers=4,
-        num_heads=16,
-        d_ff=1344,
-        context_length=256,
-        rope_theta=10000,
-    ).to(device)
+    model = TransformerLM(**MODEL_CONFIGS["toy"]).to(device)
 
     lr = min_lr
     optimizer = AdamW(
@@ -91,9 +84,9 @@ plt.show()
 
 
 # %%
-candidate_lrs = [
+candidate_lrs_toy = [
+    1.5e-4,
     3e-4,
-    6e-4,
     1e-3,
     2e-3,
 ]
