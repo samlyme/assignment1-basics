@@ -15,26 +15,51 @@ def generate_text(
     prompt: str,
     max_tokens: int = 128,
     temperature: float = 1.0,
+    k: int | None = None,
     device: torch.device | None = None,
 ) -> str:
     tokens = tokenizer.encode(prompt)
 
-    # assume that we dont have batched inputs yet
-    for i in range(max_tokens):
-        logits = model(torch.tensor(tokens, dtype=torch.long, device=device))[
-            -1
-        ]
+    if k is not None and k < 1:
+        raise ValueError("k must be at least 1")
 
-        if temperature > 0:
-            probs = softmax(logits / temperature, dim=-1)
-            next_token = torch.multinomial(probs, num_samples=1)
-        else:
-            next_token = torch.argmax(logits, dim=-1, keepdim=True)
+    with torch.no_grad():
+        for _ in range(max_tokens):
+            logits = model(
+                torch.tensor(tokens, dtype=torch.long, device=device)
+            )[-1]
 
-        tokens.append(int(next_token))
+            if temperature > 0:
+                scaled_logits = logits / temperature
 
-        if tokenizer.decode(tokens[-1:]) == "<|endoftext|>":
-            break
+                if k is not None and k < scaled_logits.size(-1):
+                    # Restrict sampling to the k most likely tokens.
+                    top_k_logits, top_k_indices = torch.topk(
+                        scaled_logits,
+                        k=k,
+                        dim=-1,
+                    )
+                    probabilities = softmax(top_k_logits, dim=-1)
+
+                    sampled_index = torch.multinomial(
+                        probabilities,
+                        num_samples=1,
+                    )
+                    next_token = top_k_indices[sampled_index]
+                else:
+                    probabilities = softmax(scaled_logits, dim=-1)
+                    next_token = torch.multinomial(
+                        probabilities,
+                        num_samples=1,
+                    )
+            else:
+                # Temperature <= 0 means deterministic greedy decoding.
+                next_token = torch.argmax(logits, dim=-1, keepdim=True)
+
+            tokens.append(int(next_token.item()))
+
+            if tokenizer.decode(tokens[-1:]) == "<|endoftext|>":
+                break
 
     return tokenizer.decode(tokens)
 
