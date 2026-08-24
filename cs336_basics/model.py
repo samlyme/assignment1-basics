@@ -1,5 +1,6 @@
 from math import ceil, sqrt
 import math
+import typing
 
 from jaxtyping import Bool, Float, Int
 from torch import Tensor
@@ -35,6 +36,9 @@ class Linear(torch.nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return einsum(self.weight, x, "d_out d_in, ... d_in -> ... d_out")
 
+    if typing.TYPE_CHECKING:
+        __call__ = forward
+
 
 class Embedding(torch.nn.Module):
     def __init__(
@@ -60,6 +64,9 @@ class Embedding(torch.nn.Module):
 
     def forward(self, token_ids: torch.Tensor) -> torch.Tensor:
         return self.weight[token_ids]
+
+    if typing.TYPE_CHECKING:
+        __call__ = forward
 
 
 class RMSNorm(torch.nn.Module):
@@ -87,6 +94,9 @@ class RMSNorm(torch.nn.Module):
         result = (x / rms) * self.weight
 
         return result.to(in_dtype)
+
+    if typing.TYPE_CHECKING:
+        __call__ = forward
 
 
 def silu(x: torch.Tensor) -> torch.Tensor:
@@ -116,6 +126,9 @@ class SwiGLU(torch.nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.w2(silu(self.w1(x)) * self.w3(x))
+
+    if typing.TYPE_CHECKING:
+        __call__ = forward
 
 
 class RotaryPositionalEmbedding(torch.nn.Module):
@@ -174,6 +187,9 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         # Returns a tensor of shape ... k 2 2.
         rotations: torch.Tensor = self.rotations  # type: ignore
         return rotations[token_positions]
+
+    if typing.TYPE_CHECKING:
+        __call__ = forward
 
 
 def scaled_dot_product_attention(
@@ -258,6 +274,9 @@ class MultiheadSelfAttention(torch.nn.Module):
         out = rearrange(out, "... head n d_v -> ... n (head d_v)")
         return self.output_proj(out)
 
+    if typing.TYPE_CHECKING:
+        __call__ = forward
+
 
 class TransformerBlock(torch.nn.Module):
     def __init__(
@@ -286,6 +305,9 @@ class TransformerBlock(torch.nn.Module):
         z_1 = x + self.attn(self.ln1(x), token_positions)
 
         return z_1 + self.ffn(self.ln2(z_1))
+
+    if typing.TYPE_CHECKING:
+        __call__ = forward
 
 
 class TransformerLM(torch.nn.Module):
@@ -339,3 +361,6 @@ class TransformerLM(torch.nn.Module):
         z = self.ln_final(z)
         z = self.lm_head(z)
         return z
+
+    if typing.TYPE_CHECKING:
+        __call__ = forward
