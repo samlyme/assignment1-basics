@@ -310,6 +310,7 @@ class TransformerBlock(torch.nn.Module):
         __call__ = forward
 
 
+# TODO: call the models directly, rather than using forward
 class TransformerLM(torch.nn.Module):
     def __init__(
         self,

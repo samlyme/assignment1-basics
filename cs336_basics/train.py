@@ -13,6 +13,7 @@ from cs336_basics.utils import get_batch, load_checkpoint, save_checkpoint
 import sys
 
 
+# TODO: define architecture ablations
 # Define some hparams
 MODEL_CONFIGS = {
     "toy": {
@@ -53,6 +54,7 @@ MODEL_CONFIGS = {
     },
 }
 
+# TODO: define lr scheduling.
 OPTIM_CONFIGS = {
     "slower": {
         "lr": 1.5e-4,
@@ -119,7 +121,7 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     print(f"Save models and logs to: {out_dir}")
 
-    # NOTE: this is cursed. Implicitly redirecting everything into that log.
+    # TODO: stop this madness. refactor to use logging module.
     log = open(out_dir / "train.log", "a", buffering=1)
     sys.stdout = log
     sys.stderr = log
@@ -171,6 +173,8 @@ def main():
     print(f"{LOG_FREQ=}, {SAVE_FREQ=}")
     print("~" * 32)
 
+    # TODO: factor this out into another function. That way I can programmatically
+    # run sweeps from one python script. I only have access to 1 gpu anyways.
     start_iter = 0
     if args.checkpoint is not None:
         start_iter = load_checkpoint(args.checkpoint, model, optim)

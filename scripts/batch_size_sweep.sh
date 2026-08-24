@@ -1,1 +1,1 @@
-uv run cs336_basics/train.py --batch-size 32 --total-tokens 327680000 && uv run cs336_basics/train.py --batch-size 64 --total-tokens 327680000 && uv run cs336_basics/train.py --batch-size 128 --total-tokens 327680000
+uv run cs336_basics/train.py --batch-size 64 --total-tokens 327680000 && uv run cs336_basics/train.py --batch-size 128 --total-tokens 327680000
