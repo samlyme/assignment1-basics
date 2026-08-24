@@ -227,9 +227,9 @@ class MultiheadSelfAttention(torch.nn.Module):
         x: Float[Tensor, " ... n d_model"],
         token_positions: Int[Tensor, " ... n"] | None = None,
     ) -> Float[Tensor, "... n d_v"]:
-        Q = self.q_proj.forward(x)
-        K = self.k_proj.forward(x)
-        V = self.v_proj.forward(x)
+        Q = self.q_proj(x)
+        K = self.k_proj(x)
+        V = self.v_proj(x)
 
         Q_i = rearrange(
             Q, "... n (head d_k) -> ... head n d_k", head=self.num_heads
@@ -241,8 +241,8 @@ class MultiheadSelfAttention(torch.nn.Module):
             token_positions is not None
             and self.positional_embedding is not None
         ):
-            Q_i = self.positional_embedding.forward(Q_i, token_positions)
-            K_i = self.positional_embedding.forward(K_i, token_positions)
+            Q_i = self.positional_embedding(Q_i, token_positions)
+            K_i = self.positional_embedding(K_i, token_positions)
 
         V_i = rearrange(
             V, "... n (head d_v) -> ... head n d_v", head=self.num_heads
@@ -283,9 +283,9 @@ class TransformerBlock(torch.nn.Module):
         n = x.shape[-2]
         token_positions = torch.arange(n, dtype=torch.long, device=x.device)
 
-        z_1 = x + self.attn.forward(self.ln1.forward(x), token_positions)
+        z_1 = x + self.attn(self.ln1(x), token_positions)
 
-        return z_1 + self.ffn.forward(self.ln2.forward(z_1))
+        return z_1 + self.ffn(self.ln2(z_1))
 
 
 class TransformerLM(torch.nn.Module):
@@ -330,12 +330,12 @@ class TransformerLM(torch.nn.Module):
                 "Input sequence does not fit within model's context window."
             )
 
-        emb = self.token_embeddings.forward(x)
+        emb = self.token_embeddings(x)
 
         z = emb
         for layer in self.layers:
-            z = layer.forward(z)
+            z = layer(z)
 
-        z = self.ln_final.forward(z)
-        z = self.lm_head.forward(z)
+        z = self.ln_final(z)
+        z = self.lm_head(z)
         return z
