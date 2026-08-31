@@ -1,1 +1,0 @@
-py-spy  record --subprocesses -o out/train_bpe_tinystories_profile.svg -- .venv/bin/python cs336_basics/train_tokenizer.py data/TinyStoriesV2-GPT4-train.txt --vocab-size 10000 --out-dir out/bpe_params_ts-train
