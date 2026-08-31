@@ -29,7 +29,9 @@ def find_chunk_boundaries(
     Chunk the file into parts that can be counted independently.
     May return fewer chunks if the boundaries end up overlapping.
     """
-    assert isinstance(split_special_token, bytes), "Must represent special token as a bytestring"
+    assert isinstance(split_special_token, bytes), (
+        "Must represent special token as a bytestring"
+    )
 
     # Get total file size in bytes
     file.seek(0, os.SEEK_END)
@@ -74,7 +76,9 @@ def split_pretokens(text: Iterable[str]):
 
 
 def pretokenize(
-    input_path: str | os.PathLike, special_tokens: list[str], range: tuple[int, int] | None = None
+    input_path: str | os.PathLike,
+    special_tokens: list[str],
+    range: tuple[int, int] | None = None,
 ) -> Counter[bytes]:
     with open(input_path, "rb") as file:
         if range is None:
@@ -92,30 +96,45 @@ def pretokenize(
 
     pretokens = split_pretokens(docs)
 
-    counts = Counter(map(lambda x: x.group().encode("utf-8", errors="ignore"), pretokens))
+    counts = Counter(
+        map(lambda x: x.group().encode("utf-8", errors="ignore"), pretokens)
+    )
     return counts
 
 
-def index_pretokens(counts: Counter[bytes]) -> tuple[PretokenVocab, PretokenIdCounts]:
+def index_pretokens(
+    counts: Counter[bytes],
+) -> tuple[PretokenVocab, PretokenIdCounts]:
     pretoken_items = list(counts.items())
     pretoken_items.sort()
 
-    pretoken_vocab = {i: tuple(map(int, bytes)) for i, (bytes, count) in enumerate(pretoken_items)}
-    pretoken_id_counts = Counter({i: count for i, (bytes, count) in enumerate(pretoken_items)})
+    pretoken_vocab = {
+        i: tuple(map(int, bytes))
+        for i, (bytes, count) in enumerate(pretoken_items)
+    }
+    pretoken_id_counts = Counter(
+        {i: count for i, (bytes, count) in enumerate(pretoken_items)}
+    )
 
     return pretoken_vocab, pretoken_id_counts
 
 
-def parallel_pretokenize(input_path: str | os.PathLike, special_tokens: list[str], workers: int) -> Counter[bytes]:
+def parallel_pretokenize(
+    input_path: str | os.PathLike, special_tokens: list[str], workers: int
+) -> Counter[bytes]:
     assert workers > 0
 
     with open(input_path, "rb") as file:
-        boundaries = find_chunk_boundaries(file, workers, special_tokens[0].encode("utf-8"))
+        boundaries = find_chunk_boundaries(
+            file, workers, special_tokens[0].encode("utf-8")
+        )
         if len(boundaries) >= 2:
             chunks = zip(boundaries[:-1], boundaries[1:])
 
             with Pool(workers) as pool:
-                tasks = [(input_path, special_tokens, chunk) for chunk in chunks]
+                tasks = [
+                    (input_path, special_tokens, chunk) for chunk in chunks
+                ]
                 partial_counts = pool.starmap(pretokenize, tasks)
 
             total: Counter[bytes] = Counter()
@@ -127,6 +146,27 @@ def parallel_pretokenize(input_path: str | os.PathLike, special_tokens: list[str
     return total
 
 
+def serial_pretokenize(
+    input_path: str | os.PathLike, special_tokens: list[str], splits: int
+) -> Counter[bytes]:
+    assert splits > 0
+
+    with open(input_path, "rb") as file:
+        boundaries = find_chunk_boundaries(
+            file, splits, special_tokens[0].encode("utf-8")
+        )
+
+    total: Counter[bytes] = Counter()
+    if len(boundaries) >= 2:
+        chunks = zip(boundaries[:-1], boundaries[1:])
+        for chunk in chunks:
+            total.update(pretokenize(input_path, special_tokens, chunk))
+    else:
+        total = pretokenize(input_path, special_tokens)
+
+    return total
+
+
 def main():
     parser = argparse.ArgumentParser(description="Read a file as raw bytes.")
     parser.add_argument(
@@ -134,7 +174,9 @@ def main():
         type=str,
         help="Path to the file to read",
     )
-    parser.add_argument("--workers", type=int, default=0, help="Number of worker threads")
+    parser.add_argument(
+        "--workers", type=int, default=0, help="Number of worker threads"
+    )
     parser.add_argument(
         "--output-path",
         "-o",
@@ -147,7 +189,9 @@ def main():
     if args.workers == 0:
         results = pretokenize(args.input_path, ["<|endoftext|>"])
     else:
-        results = parallel_pretokenize(args.input_path, ["<|endoftext|>"], args.workers)
+        results = parallel_pretokenize(
+            args.input_path, ["<|endoftext|>"], args.workers
+        )
 
     with open(args.output_path, "wb") as out:
         pickle.dump(results, out)

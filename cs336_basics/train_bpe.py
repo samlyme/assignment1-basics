@@ -4,7 +4,10 @@ import os
 from pathlib import Path
 import pickle
 
-from cs336_basics.pretokenizer import index_pretokens, parallel_pretokenize
+from cs336_basics.pretokenizer import (
+    index_pretokens,
+    serial_pretokenize,
+)
 
 
 type TokenId = int
@@ -155,7 +158,7 @@ def train_bpe(
     special_tokens: list[str],
 ) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
     # pretoken_counts = pretokenize(input_path, special_tokens)
-    pretoken_counts = parallel_pretokenize(input_path, special_tokens, 2)
+    pretoken_counts = serial_pretokenize(input_path, special_tokens, 32)
     pretoken_vocab, pretoken_id_counts = index_pretokens(pretoken_counts)
 
     assert len(pretoken_vocab) == len(pretoken_id_counts)
@@ -211,12 +214,6 @@ def main():
     )
     parser.add_argument(
         "--vocab-size", type=int, default=1000, help="Final vocab size"
-    )
-    parser.add_argument(
-        "--workers",
-        type=int,
-        default=4,
-        help="Number of CPU's for pretokenization",
     )
     parser.add_argument(
         "--out-dir",
