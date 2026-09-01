@@ -1,4 +1,5 @@
 import argparse
+import tempfile
 from collections.abc import Iterable
 from collections.abc import Iterator
 import heapq
@@ -7,30 +8,46 @@ import pickle
 import numpy as np
 import regex
 
-from cs336_basics.pretokenizer import split_pretokens
+from cs336_basics.pretokenizer import find_chunk_boundaries, split_pretokens
+from tqdm import tqdm
 
 
 class Tokenizer:
     def __init__(
-        self, vocab: dict[int, bytes], merges: list[tuple[bytes, bytes]], special_tokens: list[str] | None = None
+        self,
+        vocab: dict[int, bytes],
+        merges: list[tuple[bytes, bytes]],
+        special_tokens: list[str] | None = None,
     ):
         self.vocab = vocab
         self.vocab_index = {v: k for k, v in vocab.items()}
         self.merges = merges
         self.merges_index = {pair: rank for rank, pair in enumerate(merges)}
-        self.special_tokens: set[str] = set(special_tokens) if special_tokens else set()
-        self.special_tokens_sorted = sorted(self.special_tokens, key=len, reverse=True)
+        self.special_tokens: set[str] = (
+            set(special_tokens) if special_tokens else set()
+        )
+        self.special_tokens_sorted = sorted(
+            self.special_tokens, key=len, reverse=True
+        )
 
     @classmethod
-    def from_files(cls, vocab_filepath: str, merges_filepath: str, special_tokens: list[str] | None = None):
+    def from_files(
+        cls,
+        vocab_filepath: str,
+        merges_filepath: str,
+        special_tokens: list[str] | None = None,
+    ):
         with open(vocab_filepath, "rb") as file:
             vocab = pickle.load(file)
-            assert type(vocab) is dict and all(type(k) is int and type(v) is bytes for k, v in vocab.items())
+            assert type(vocab) is dict and all(
+                type(k) is int and type(v) is bytes for k, v in vocab.items()
+            )
 
         with open(merges_filepath, "rb") as file:
             merges = pickle.load(file)
             assert type(merges) is list and all(
-                type(i) is tuple and type(i[0]) is bytes and type(i[1]) is bytes for i in merges
+                type(i) is tuple and type(i[0]) is bytes and type(i[1]) is bytes
+                for i in merges
             )
 
         return Tokenizer(vocab, merges, special_tokens)
@@ -145,15 +162,46 @@ def main():
 
     args = parser.parse_args()
 
-    tokenizer = Tokenizer.from_files(args.vocab_filepath, args.merges_filepath, ["<|endoftext|>"])
+    tokenizer = Tokenizer.from_files(
+        args.vocab_filepath, args.merges_filepath, ["<|endoftext|>"]
+    )
 
-    with open(args.input_filepath, "rb") as file:
-        input = file.read().decode()
+    with tempfile.NamedTemporaryFile() as temp:
+        with open(args.input_filepath, "rb") as input_file:
+            chunks = find_chunk_boundaries(input_file, 32, b"<|endoftext|>")
 
-    res = tokenizer.encode(input)
-    tokens = np.array(res, dtype=np.uint16)
+            total_tokens = 0
+            for start, end in tqdm(
+                zip(chunks[:-1], chunks[1:]), "tokenizing chunks"
+            ):
+                input_file.seek(start)
+                raw = input_file.read(end - start).decode()
+                tokens = tokenizer.encode(raw)
+                total_tokens += len(tokens)
+                np.asarray(tokens, dtype=np.uint16).tofile(temp)
 
-    np.save(args.output_filepath, tokens)
+        temp.flush()
+
+        output = np.lib.format.open_memmap(
+            args.output_filepath,
+            mode="w+",
+            dtype=np.uint16,
+            shape=(total_tokens,),
+        )
+        raw_tokens = np.memmap(
+            temp,
+            mode="r",
+            dtype=np.uint16,
+            shape=(total_tokens,),
+        )
+
+        copy_size = 16_000_000  # 32 MB for uint16
+
+        for start in tqdm(range(0, total_tokens, copy_size), "copying chunks"):
+            end = min(start + copy_size, total_tokens)
+            output[start:end] = raw_tokens[start:end]
+
+        output.flush()
 
 
 if __name__ == "__main__":
