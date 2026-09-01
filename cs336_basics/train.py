@@ -1,6 +1,6 @@
-from datetime import datetime
 from pathlib import Path
 import torch
+import wandb
 
 import numpy as np
 import argparse
@@ -9,8 +9,6 @@ from cs336_basics.model import TransformerLM
 from cs336_basics.nn_utils import cross_entropy
 from cs336_basics.optimizer import AdamW
 from cs336_basics.utils import get_batch, load_checkpoint, save_checkpoint
-
-import sys
 
 
 # TODO: define architecture ablations
@@ -79,26 +77,24 @@ OPTIM_CONFIGS = {
 }
 
 
-def main():
+def parse_args():
     parser = argparse.ArgumentParser(description="Train a model")
     parser.add_argument(
         "--train",
         type=str,
         help="Path to tokenized training data",
-        default="data/ts-train-ts-10000.npy",
     )
     parser.add_argument(
         "--val",
         type=str,
         help="Path to tokenized validation data",
-        default="data/ts-valid-ts-10000.npy",
     )
 
     parser.add_argument("--model-config", type=str, default="toy")
     parser.add_argument("--optim-config", type=str, default="slow")
 
-    parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--steps", type=int, default=40000)
+    parser.add_argument("--batch-size", type=int, default=8)
+    parser.add_argument("--steps", type=int, default=10000)
     parser.add_argument("--total-tokens", type=int)
 
     parser.add_argument("--log-freq", type=int, default=100)
@@ -110,7 +106,11 @@ def main():
 
     parser.add_argument("--out-dir", type=str)
 
-    args = parser.parse_args()
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
 
     if args.out_dir:
         out_dir = Path(args.out_dir)
@@ -120,11 +120,6 @@ def main():
         )
     out_dir.mkdir(parents=True, exist_ok=True)
     print(f"Save models and logs to: {out_dir}")
-
-    # TODO: stop this madness. refactor to use logging module.
-    log = open(out_dir / "train.log", "a", buffering=1)
-    sys.stdout = log
-    sys.stderr = log
 
     if args.device:
         device = torch.device(args.device)
@@ -141,7 +136,7 @@ def main():
 
     print(f"USING DEVICE: {device}")
     # use mmap_mode="c" because it means "copy on write".
-    # This way, we garuantee that the dataset is unharmed, but we get rid of
+    # This way, we guarantee that the dataset is unharmed, but we get rid of
     # that warning.
     dataset = np.load(args.train, mmap_mode="c")
     val_dataset = np.load(args.val, mmap_mode="c")
@@ -173,6 +168,16 @@ def main():
     print(f"{LOG_FREQ=}, {SAVE_FREQ=}")
     print("~" * 32)
 
+    run = wandb.init(
+        entity="canofspam-cal-poly-pomona",
+        project="my-awesome-project",
+        config={
+            "model": model_config,
+            "train": train_configs,
+            "optim": optim_config,
+        },
+    )
+
     # TODO: factor this out into another function. That way I can programmatically
     # run sweeps from one python script. I only have access to 1 gpu anyways.
     start_iter = 0
@@ -202,9 +207,12 @@ def main():
             x_val = x_val.long()
             y_val = y_val.long()
             val_loss = cross_entropy(model(x_val), y_val).item()
-            time = datetime.now()
-            print(
-                f"{time.strftime('%H:%M:%S')}, {iteration=}, {train_loss=:.3f}, {val_loss=:.3f}"
+            run.log(
+                {
+                    "train_loss": train_loss,
+                    "val_loss": val_loss,
+                },
+                step=iteration,
             )
 
         if iteration % SAVE_FREQ == 0:
@@ -220,8 +228,12 @@ def main():
     x_val = x_val.long()
     y_val = y_val.long()
     val_loss = cross_entropy(model(x_val), y_val).item()
-    print(
-        f"{time.strftime('%H:%M:%S')}, {iteration=}, {train_loss=:.3f}, {val_loss=:.3f}, final"
+    run.log(
+        {
+            "train_loss": train_loss,
+            "val_loss": val_loss,
+        },
+        step=iteration,
     )
     save_checkpoint(model, optim, iteration, out_dir / f"{iteration}-final.pt")
 
