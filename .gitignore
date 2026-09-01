@@ -165,3 +165,4 @@ data
 out
 log
 .DS_Store
+**/wandb
