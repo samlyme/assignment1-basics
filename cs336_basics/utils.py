@@ -8,7 +8,7 @@ import numpy as np
 import torch
 import numpy.typing as npt
 from cs336_basics.nn_utils import clip_gradient, cross_entropy
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 
 @dataclass(kw_only=True)
@@ -124,7 +124,7 @@ def dataset_from_config(config: DatasetConfig) -> NextTokenDataset:
 def model_from_config(config: ModelConfig) -> torch.nn.Module:
     match config:
         case TransformerLMConfig():
-            return TransformerLM(**config.__dict__)
+            return TransformerLM(**asdict(config))
 
 
 def optimizer_from_config(
@@ -132,7 +132,7 @@ def optimizer_from_config(
 ) -> torch.optim.Optimizer:
     match config:
         case AdamWConfig():
-            return AdamW(model.parameters(), **config.__dict__)
+            return AdamW(model.parameters(), **asdict(config))
 
 
 def lr_sweep(
