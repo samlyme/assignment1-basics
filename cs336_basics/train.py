@@ -1,4 +1,6 @@
+from dataclasses import asdict
 from pathlib import Path
+import numpy as np
 import torch
 import wandb
 
@@ -9,8 +11,9 @@ from cs336_basics.utils import (
     MODEL_CONFIGS,
     OPTIM_CONFIGS,
     DatasetConfig,
+    NextTokenDataset,
+    RunConfig,
     TrainConfig,
-    dataset_from_config,
     model_from_config,
     load_checkpoint,
     optimizer_from_config,
@@ -18,10 +21,8 @@ from cs336_basics.utils import (
 )
 
 
-def train(
-    model: torch.nn.Module,
-    optim: torch.optim.Optimizer,
-    train_config: TrainConfig,
+def run_training(
+    config: RunConfig,
     out_dir: Path,
     log_freq: int = 100,
     save_freq: int = 1000,
@@ -29,26 +30,41 @@ def train(
     device: torch.types.Device = None,
     wandb_run: wandb.Run | None = None,
 ):
+    model = model_from_config(config.model).to(device)
+    model.compile()
+
+    optim = optimizer_from_config(model, config.optim)
+
     if checkpoint is not None:
         start_iter = load_checkpoint(checkpoint, model, optim)
     else:
         start_iter = 0
 
-    dataset_train = dataset_from_config(train_config.train)
+    dataset_train = NextTokenDataset(
+        # first 'train' is the train config, second is the train set.
+        data=np.load(config.train.train.path, mmap_mode="c"),
+        context_length=config.model.context_length,
+    )
+
     load_train = iter(
         torch.utils.data.DataLoader(
-            dataset_train, batch_size=train_config.batch_size
+            dataset_train, batch_size=config.train.batch_size
         )
     )
 
-    dataset_val = dataset_from_config(train_config.val)
+    dataset_val = NextTokenDataset(
+        # first 'train' is the train config, second is the train set.
+        data=np.load(config.train.val.path, mmap_mode="c"),
+        context_length=config.model.context_length,
+    )
+
     load_val = iter(
         torch.utils.data.DataLoader(
-            dataset_val, batch_size=train_config.batch_size
+            dataset_val, batch_size=config.train.batch_size
         )
     )
 
-    for iteration in range(start_iter, train_config.steps):
+    for iteration in range(start_iter, config.train.steps):
         x_val, y_val = next(load_train)
         x_val = x_val.to(device, dtype=torch.long)
         y_val = y_val.to(device, dtype=torch.long)
@@ -147,22 +163,18 @@ def main():
         device = torch.device("cpu")
 
     model_config = MODEL_CONFIGS[args.model_config]
-    model = model_from_config(model_config).to(device)
-    model.compile()
-    print(f"Model configs: {model_config}")
+    # model = model_from_config(model_config).to(device)
+    # model.compile()
+    # print(f"Model configs: {model_config}")
 
     optim_config = OPTIM_CONFIGS[args.optim_config]
-    optim = optimizer_from_config(model, optim_config)
-    print(f"Optim configs: {optim_config}")
+    # optim = optimizer_from_config(model, optim_config)
+    # print(f"Optim configs: {optim_config}")
 
     context_length = model_config.context_length
     train_config = TrainConfig(
-        train=DatasetConfig(
-            path=args.train, context_length=model_config.context_length
-        ),
-        val=DatasetConfig(
-            path=args.val, context_length=model_config.context_length
-        ),
+        train=DatasetConfig(path=args.train),
+        val=DatasetConfig(path=args.val),
         batch_size=args.batch_size,
         steps=args.steps,
     )
@@ -173,23 +185,23 @@ def main():
         print(
             "INFO: Using total tokens processed to override number of training steps"
         )
-    print(f"Train configs: {train_config}")
+    # print(f"Train configs: {train_config}")
 
     LOG_FREQ = args.log_freq
     SAVE_FREQ = train_config.steps // args.saves
-    print(f"{LOG_FREQ=}, {SAVE_FREQ=}")
-    print("~" * 32)
+    # print(f"{LOG_FREQ=}, {SAVE_FREQ=}")
+    # print("~" * 32)
 
-    checkpoint: Path | None = args.checkpoint
+    config = RunConfig(
+        model=model_config,
+        optim=optim_config,
+        train=train_config,
+    )
 
     run = wandb.init(
         entity="canofspam-cal-poly-pomona",
         project="my-awesome-project",
-        config={
-            "model": model_config,
-            "train": train_config,
-            "optim": optim_config,
-        },
+        config=asdict(config),
     )
 
     if args.out_dir is None:
@@ -197,11 +209,9 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     print(f"Save models and logs to: {out_dir}")
 
-    # TODO: make this take in one fat config
-    train(
-        model,
-        optim,
-        train_config,
+    checkpoint: Path | None = args.checkpoint
+    run_training(
+        config,
         out_dir,
         LOG_FREQ,
         SAVE_FREQ,

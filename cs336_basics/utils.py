@@ -79,7 +79,6 @@ OPTIM_CONFIGS: dict[str, OptimizerConfig] = {
 @dataclass(kw_only=True)
 class DatasetConfig:
     path: Path
-    context_length: int
 
 
 @dataclass(kw_only=True)
@@ -88,6 +87,13 @@ class TrainConfig:
     val: DatasetConfig
     batch_size: int = 32
     steps: int = 40_000
+
+
+@dataclass(kw_only=True)
+class RunConfig:
+    model: ModelConfig
+    optim: OptimizerConfig
+    train: TrainConfig
 
 
 class NextTokenDataset(torch.utils.data.Dataset):
@@ -111,14 +117,14 @@ class NextTokenDataset(torch.utils.data.Dataset):
         return tokens[:-1], tokens[1:]
 
 
-def dataset_from_config(config: DatasetConfig) -> NextTokenDataset:
-    # use mmap_mode="c" because it means "copy on write".
-    # This way, we guarantee that the dataset is unharmed, but we get rid of
-    # that warning.
-    return NextTokenDataset(
-        data=np.load(config.path, mmap_mode="c"),
-        context_length=config.context_length,
-    )
+# def dataset_from_config(config: DatasetConfig) -> NextTokenDataset:
+#     # use mmap_mode="c" because it means "copy on write".
+#     # This way, we guarantee that the dataset is unharmed, but we get rid of
+#     # that warning.
+#     return NextTokenDataset(
+#         data=np.load(config.path, mmap_mode="c"),
+#         context_length=config.context_length,
+#     )
 
 
 def model_from_config(config: ModelConfig) -> torch.nn.Module:
