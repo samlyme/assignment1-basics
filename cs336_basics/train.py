@@ -26,7 +26,7 @@ def train(
     log_freq: int = 100,
     save_freq: int = 1000,
     checkpoint: Path | None = None,
-    device: torch.Device = None,
+    device: torch.types.Device = None,
     wandb_run: wandb.Run | None = None,
 ):
     if checkpoint is not None:
@@ -133,13 +133,6 @@ def parse_args():
 def main():
     args = parse_args()
 
-    if args.out_dir is None:
-        out_dir = Path(
-            f"/data/models/{args.model_config}-{args.optim_config}-{args.batch_size}"
-        )
-    out_dir.mkdir(parents=True, exist_ok=True)
-    print(f"Save models and logs to: {out_dir}")
-
     if args.device:
         device = torch.device(args.device)
     elif torch.cuda.is_available():
@@ -198,6 +191,11 @@ def main():
             "optim": optim_config,
         },
     )
+
+    if args.out_dir is None:
+        out_dir = Path(f"/data/models/{run.name}")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Save models and logs to: {out_dir}")
 
     train(
         model,
