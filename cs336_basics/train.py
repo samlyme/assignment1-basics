@@ -197,6 +197,7 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     print(f"Save models and logs to: {out_dir}")
 
+    # TODO: make this take in one fat config
     train(
         model,
         optim,
