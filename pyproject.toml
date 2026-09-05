@@ -21,6 +21,7 @@ dependencies = [
     "ruff>=0.15.8",
     "ipykernel>=7.3.0",
     "matplotlib>=3.11.1",
+    "scipy>=1.18.1",
 ]
 
 [build-system]

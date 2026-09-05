@@ -310,16 +310,15 @@ class TransformerBlock(torch.nn.Module):
         __call__ = forward
 
 
-# TODO: call the models directly, rather than using forward
 class TransformerLM(torch.nn.Module):
     def __init__(
         self,
         vocab_size: int,
         d_model: int,
+        num_layers: int,
         num_heads: int,
         d_ff: int,
         context_length: int,
-        num_layers: int,
         rope_theta: float,
     ) -> None:
         if d_model % num_heads != 0:
@@ -364,4 +363,8 @@ class TransformerLM(torch.nn.Module):
         return z
 
     if typing.TYPE_CHECKING:
-        __call__ = forward
+
+        def __call__(
+            self, x: Int[Tensor, " batch_size sequence_length"]
+        ) -> Float[Tensor, " batch_size sequence_length vocab_size"]:
+            return self.forward(x)

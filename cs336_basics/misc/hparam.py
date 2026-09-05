@@ -1,22 +1,22 @@
 # %%
+from cs336_basics.model import TransformerLM
 import numpy as np
 import torch
-from tqdm import tqdm
 
-from cs336_basics.model import TransformerLM
-from cs336_basics.nn_utils import clip_gradient, cross_entropy
 from cs336_basics.optimizer import AdamW
-from cs336_basics.utils import get_batch
-from cs336_basics.train import MODEL_CONFIGS
+from cs336_basics.utils import (
+    model_from_config,
+    lr_sweep,
+    NextTokenDataset,
+    MODEL_CONFIGS,
+)
 
 import matplotlib.pyplot as plt
 
 # %%
 
-device = torch.device("cuda")
-
-dataset = np.load(
-    "../../data/ts-valid-ts-10000.npy",
+data = np.load(
+    "/data/tokenized/ts-valid-10k_ts.npy",
     mmap_mode="c",
 )
 
@@ -25,44 +25,21 @@ dataset = np.load(
 min_lr = 1e-5
 max_lr = 1e-2
 steps = 100
-batch_sizes = [32, 64, 128]
+batch_sizes = [32]
 
 res = {}
 
 for batch_size in batch_sizes:
-    print("using batch_size", batch_size)
-    model = TransformerLM(**MODEL_CONFIGS["toy"]).to(device)
-
+    model: TransformerLM = model_from_config(MODEL_CONFIGS["toy"])  # type: ignore
     lr = min_lr
     optimizer = AdamW(
         model.parameters(), lr=lr, betas=(0.9, 0.999), weight_decay=0
     )
 
-    lrs = []
-    losses = []
-
-    for it in tqdm(range(steps)):
-        lr = min_lr * (max_lr / min_lr) ** (it / (steps - 1))
-
-        for group in optimizer.param_groups:
-            group["lr"] = lr
-
-        x, y = get_batch(dataset, batch_size, 256, "cuda:0")
-
-        x = x.long()
-        y = y.long()
-
-        logits = model(x)
-        loss = cross_entropy(logits, y)
-        loss.backward()
-
-        clip_gradient(model.parameters(), 1.0)
-
-        optimizer.step()
-        optimizer.zero_grad()
-
-        lrs.append(lr)
-        losses.append(loss.item())
+    dataloader = torch.utils.data.DataLoader(
+        NextTokenDataset(data, 256), batch_size
+    )
+    lrs, losses = lr_sweep(model, optimizer, dataloader, device="cuda")
 
     res[batch_size] = {"lrs": lrs, "losses": losses}
 

@@ -1,37 +1,182 @@
-from dataclasses import dataclass
+from collections.abc import Iterable
 import os
+from pathlib import Path
 import typing
 
+from cs336_basics.model import TransformerLM
+from cs336_basics.optimizer import AdamW
+import numpy as np
 import torch
 import numpy.typing as npt
+from cs336_basics.nn_utils import clip_gradient, cross_entropy
+from dataclasses import dataclass
 
 
-@dataclass(frozen=True)
-class TransformerLMConfig(typing.TypedDict):
+@dataclass(kw_only=True)
+class TransformerLMConfig:
     vocab_size: int
     d_model: int
+    num_layers: int
     num_heads: int
     d_ff: int
     context_length: int
-    num_layers: int
     rope_theta: float
 
 
-def get_batch(
-    dataset: npt.NDArray,
-    batch_size: int,
-    context_length: int,
-    device: str | torch.device,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    assert dataset.ndim == 1
+ModelConfig = TransformerLMConfig
 
-    # .from_numpy shares memory with numpy, thus it does not mess with mmap.
-    data = torch.from_numpy(dataset).unfold(0, context_length + 1, 1)
-    start_indices = torch.randint(0, data.shape[0], (batch_size,))
 
-    batches = data[start_indices]
+MODEL_CONFIGS: dict[str, ModelConfig] = {
+    "toy": TransformerLMConfig(
+        vocab_size=10000,
+        d_model=512,
+        num_layers=4,
+        num_heads=16,
+        d_ff=1344,
+        context_length=256,
+        rope_theta=10000,
+    ),
+    "small": TransformerLMConfig(
+        vocab_size=10000,
+        d_model=768,
+        num_layers=4,
+        num_heads=16,
+        d_ff=2048,
+        context_length=256,
+        rope_theta=10000,
+    ),
+}
 
-    return batches[:, :-1].to(device), batches[:, 1:].to(device)
+
+@dataclass(kw_only=True)
+class AdamWConfig:
+    lr: float = 0.001
+    betas: tuple[float, float] = (0.9, 0.999)
+    eps: float = 1e-8
+    weight_decay: float = 0
+
+
+OptimizerConfig = AdamWConfig
+
+OPTIM_CONFIGS: dict[str, OptimizerConfig] = {
+    "slower": AdamWConfig(
+        lr=1.5e-4,
+        betas=(0.9, 0.999),
+        weight_decay=0,
+    ),
+    "slow": AdamWConfig(
+        lr=3e-4,
+        betas=(0.9, 0.999),
+        weight_decay=0,
+    ),
+    "fast": AdamWConfig(
+        lr=1e-3,
+        betas=(0.9, 0.999),
+        weight_decay=0,
+    ),
+}
+
+
+@dataclass(kw_only=True)
+class DatasetConfig:
+    path: Path
+    context_length: int
+
+
+@dataclass(kw_only=True)
+class TrainConfig:
+    train: DatasetConfig
+    val: DatasetConfig
+    batch_size: int = 32
+    steps: int = 40_000
+
+
+class NextTokenDataset(torch.utils.data.Dataset):
+    def __init__(
+        self,
+        data: npt.NDArray[np.integer],
+        context_length: int,
+    ) -> None:
+        if data.ndim != 1:
+            raise ValueError("data must be one-dimensional")
+        if len(data) <= context_length:
+            raise ValueError("data must be longer than context_length")
+
+        self.data = torch.from_numpy(data).unfold(0, context_length + 1, 1)
+
+    def __len__(self) -> int:
+        return self.data.shape[0]
+
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
+        tokens = self.data[index]
+        return tokens[:-1], tokens[1:]
+
+
+def dataset_from_config(config: DatasetConfig) -> NextTokenDataset:
+    return NextTokenDataset(
+        data=np.load(config.path, mmap_mode="c"),
+        context_length=config.context_length,
+    )
+
+
+def model_from_config(config: ModelConfig) -> torch.nn.Module:
+    match config:
+        case TransformerLMConfig():
+            return TransformerLM(**config.__dict__)
+
+
+def optimizer_from_config(
+    model: torch.nn.Module, config: OptimizerConfig
+) -> torch.optim.Optimizer:
+    match config:
+        case AdamWConfig():
+            return AdamW(model.parameters(), **config.__dict__)
+
+
+def lr_sweep(
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    dataloader: torch.utils.data.DataLoader,
+    low: float = 1e-5,
+    high: float = 1e-2,
+    steps: int = 128,
+    device: torch.types.Device = None,
+) -> tuple[list, list]:
+    for group in optimizer.param_groups:
+        group["lr"] = low
+
+    model = model.to(device)
+    model.train()
+    data = iter(dataloader)
+
+    lrs = []
+    losses = []
+    for step in range(steps):
+        lr = low * (high / low) ** (step / (steps - 1))
+
+        for group in optimizer.param_groups:
+            group["lr"] = lr
+
+        x, y = next(data)
+        x: torch.Tensor
+        y: torch.Tensor
+
+        x = x.to(device, dtype=torch.long)
+        y = y.to(device, dtype=torch.long)
+
+        logits = model(x)
+        loss = cross_entropy(logits, y)
+        loss.backward()
+
+        clip_gradient(model.parameters(), 1.0)
+
+        optimizer.step()
+        optimizer.zero_grad()
+
+        lrs.append(lr)
+        losses.append(loss.item())
+
+    return lrs, losses
 
 
 def save_checkpoint(
