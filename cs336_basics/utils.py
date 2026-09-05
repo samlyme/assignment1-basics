@@ -10,6 +10,8 @@ import numpy.typing as npt
 from cs336_basics.nn_utils import clip_gradient, cross_entropy
 from dataclasses import asdict, dataclass
 
+from pydantic import TypeAdapter
+
 
 @dataclass(kw_only=True)
 class TransformerLMConfig:
@@ -76,7 +78,7 @@ OPTIM_CONFIGS: dict[str, OptimizerConfig] = {
 }
 
 
-@dataclass(kw_only=True)
+@dataclass()
 class DatasetConfig:
     path: Path
 
@@ -94,6 +96,11 @@ class RunConfig:
     model: ModelConfig
     optim: OptimizerConfig
     train: TrainConfig
+
+
+def parse_run_config(str: str) -> RunConfig:
+    adapter = TypeAdapter(RunConfig)
+    return adapter.validate_json(str)
 
 
 class NextTokenDataset(torch.utils.data.Dataset):

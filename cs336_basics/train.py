@@ -17,6 +17,7 @@ from cs336_basics.utils import (
     model_from_config,
     load_checkpoint,
     optimizer_from_config,
+    parse_run_config,
     save_checkpoint,
 )
 
@@ -30,6 +31,8 @@ def run_training(
     device: torch.types.Device = None,
     wandb_run: wandb.Run | None = None,
 ):
+    out_dir.mkdir(parents=True, exist_ok=True)
+
     model = model_from_config(config.model).to(device)
     model.compile()
 
@@ -143,25 +146,13 @@ def parse_args():
 
     parser.add_argument("--device", type=str)
 
+    # TODO: make the run config use pydantic models.
+    parser.add_argument("--config", type=str)
+
     return parser.parse_args()
 
 
-def main():
-    args = parse_args()
-
-    if args.device:
-        device = torch.device(args.device)
-    elif torch.cuda.is_available():
-        device = torch.device("cuda")
-        # pytorch warning said this is good :D
-        torch.set_float32_matmul_precision("high")
-    elif torch.mps.is_available():
-        device = torch.device("mps")
-        # DO NOT USE `torch.set_float32_matmul_precision("high")` here.
-        # assignment claims this causes silent failures.
-    else:
-        device = torch.device("cpu")
-
+def parse_config(args: argparse.Namespace) -> RunConfig:
     model_config = MODEL_CONFIGS[args.model_config]
     # model = model_from_config(model_config).to(device)
     # model.compile()
@@ -182,15 +173,6 @@ def main():
         train_config.steps = args.total_tokens // (
             train_config.batch_size * context_length
         )
-        print(
-            "INFO: Using total tokens processed to override number of training steps"
-        )
-    # print(f"Train configs: {train_config}")
-
-    LOG_FREQ = args.log_freq
-    SAVE_FREQ = train_config.steps // args.saves
-    # print(f"{LOG_FREQ=}, {SAVE_FREQ=}")
-    # print("~" * 32)
 
     config = RunConfig(
         model=model_config,
@@ -198,18 +180,46 @@ def main():
         train=train_config,
     )
 
+    return config
+
+
+def main():
+    args = parse_args()
+
+    if args.config:
+        print("Overriding all other args with '--config'")
+        config = parse_run_config(args.config)
+    else:
+        config = parse_config(args)
+
+    if args.device:
+        device = torch.device(args.device)
+    elif torch.cuda.is_available():
+        device = torch.device("cuda")
+        # pytorch warning said this is good :D
+        torch.set_float32_matmul_precision("high")
+    elif torch.mps.is_available():
+        device = torch.device("mps")
+        # DO NOT USE `torch.set_float32_matmul_precision("high")` here.
+        # assignment claims this causes silent failures.
+    else:
+        device = torch.device("cpu")
+
     run = wandb.init(
         entity="canofspam-cal-poly-pomona",
         project="my-awesome-project",
         config=asdict(config),
     )
-
     if args.out_dir is None:
         out_dir = Path(f"/data/models/{run.name}")
     out_dir.mkdir(parents=True, exist_ok=True)
     print(f"Save models and logs to: {out_dir}")
 
+    LOG_FREQ = args.log_freq
+    SAVE_FREQ = config.train.steps // args.saves
+
     checkpoint: Path | None = args.checkpoint
+
     run_training(
         config,
         out_dir,
