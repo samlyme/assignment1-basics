@@ -1,4 +1,3 @@
-from collections.abc import Iterable
 import os
 from pathlib import Path
 import typing
@@ -113,6 +112,9 @@ class NextTokenDataset(torch.utils.data.Dataset):
 
 
 def dataset_from_config(config: DatasetConfig) -> NextTokenDataset:
+    # use mmap_mode="c" because it means "copy on write".
+    # This way, we guarantee that the dataset is unharmed, but we get rid of
+    # that warning.
     return NextTokenDataset(
         data=np.load(config.path, mmap_mode="c"),
         context_length=config.context_length,

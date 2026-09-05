@@ -2,7 +2,6 @@ from pathlib import Path
 import torch
 import wandb
 
-import numpy as np
 import argparse
 
 from cs336_basics.nn_utils import cross_entropy
@@ -35,9 +34,6 @@ def train(
     else:
         start_iter = 0
 
-    # use mmap_mode="c" because it means "copy on write".
-    # This way, we guarantee that the dataset is unharmed, but we get rid of
-    # that warning.
     dataset_train = dataset_from_config(train_config.train)
     load_train = iter(
         torch.utils.data.DataLoader(
@@ -51,6 +47,7 @@ def train(
             dataset_val, batch_size=train_config.batch_size
         )
     )
+
     for iteration in range(start_iter, train_config.steps):
         x_val, y_val = next(load_train)
         x_val = x_val.to(device, dtype=torch.long)
