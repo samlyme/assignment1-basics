@@ -117,16 +117,6 @@ class NextTokenDataset(torch.utils.data.Dataset):
         return tokens[:-1], tokens[1:]
 
 
-# def dataset_from_config(config: DatasetConfig) -> NextTokenDataset:
-#     # use mmap_mode="c" because it means "copy on write".
-#     # This way, we guarantee that the dataset is unharmed, but we get rid of
-#     # that warning.
-#     return NextTokenDataset(
-#         data=np.load(config.path, mmap_mode="c"),
-#         context_length=config.context_length,
-#     )
-
-
 def model_from_config(config: ModelConfig) -> torch.nn.Module:
     match config:
         case TransformerLMConfig():
