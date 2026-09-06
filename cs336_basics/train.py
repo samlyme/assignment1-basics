@@ -107,6 +107,12 @@ def main():
     parser = argparse.ArgumentParser(description="Train a model")
     parser.add_argument("--config", type=RunConfig.model_validate_json)
     parser.add_argument("--device", type=torch.device, default="cuda")
+
+    parser.add_argument("--out-dir", type=Path)
+    parser.add_argument("--log-freq", type=int, default=100)
+    parser.add_argument("--saves", type=int, default=5)
+
+    parser.add_argument("--checkpoint", type=Path)
     args = parser.parse_args()
 
     config: RunConfig = args.config
