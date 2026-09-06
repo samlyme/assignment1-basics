@@ -189,7 +189,7 @@ optim_config = OptimizerConfig(lr=1.5e-4)
 # Define function to submit jobs.
 
 
-def submit_pueue(config: RunConfig) -> None:
+def add_pueue(config: RunConfig, desc: str | None = None) -> None:
     def handle_path(value):
         if isinstance(value, Path):
             return str(value)
@@ -213,6 +213,7 @@ def submit_pueue(config: RunConfig) -> None:
             "pueue",
             "add",
             "--stashed",
+            *(["--label", desc] if desc is not None else []),
             "--",
             command,
         ],
@@ -224,6 +225,21 @@ def submit_pueue(config: RunConfig) -> None:
 
 
 # %%
+add_pueue(
+    RunConfig(
+        model=model_config,
+        optim=optim_config,
+        train=TrainConfig(
+            train=DatasetConfig(train_path, shuffle=False),
+            val=DatasetConfig(valid_path, shuffle=False),
+            batch_size=32,
+            steps=40_000,
+        ),
+    ),
+    "Training with no shuffle. Testing if I fixed leaky validation.",
+)
+
+# %%
 # Submit batch size sweep.
 for train_config in train_configs:
     config = RunConfig(
@@ -231,27 +247,4 @@ for train_config in train_configs:
         optim=optim_config,
         train=train_config,
     )
-    submit_pueue(config)
-
-# %%
-train_config_shuffle = TrainConfig(
-    train=DatasetConfig(train_path, shuffle=True),
-    val=DatasetConfig(valid_path, shuffle=True),
-    batch_size=128,
-    steps=10000,
-)
-
-train_config_no_shuffle = TrainConfig(
-    train=DatasetConfig(train_path, shuffle=False),
-    val=DatasetConfig(valid_path, shuffle=False),
-    batch_size=128,
-    steps=10000,
-)
-for train_config in (train_config_no_shuffle, train_config_shuffle):
-    submit_pueue(
-        RunConfig(
-            model=model_config,
-            optim=optim_config,
-            train=train_config,
-        )
-    )
+    add_pueue(config)

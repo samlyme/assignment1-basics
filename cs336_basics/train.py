@@ -35,6 +35,7 @@ def run_training(
     torch.manual_seed(42)
 
     model = model_from_config(config.model).to(device)
+    model.train()
     model.compile()
 
     optim = optimizer_from_config(model, config.optim)
@@ -71,43 +72,51 @@ def run_training(
     )
 
     for iteration in range(start_iter, config.train.steps):
-        x_val, y_val = next(load_train)
-        x_val = x_val.to(device, dtype=torch.long)
-        y_val = y_val.to(device, dtype=torch.long)
+        x_train, y_train = next(load_train)
+        x_train = x_train.to(device, dtype=torch.long)
+        y_train = y_train.to(device, dtype=torch.long)
 
-        logits = model(x_val)
-        loss = cross_entropy(logits, y_val)
+        logits = model(x_train)
+        loss = cross_entropy(logits, y_train)
         loss.backward()
 
         optim.step()
         optim.zero_grad()
 
         if iteration % log_freq == 0:
-            train_loss = loss.item()
-            x_val, y_val = next(load_val)
-            x_val = x_val.to(device, dtype=torch.long)
-            y_val = y_val.to(device, dtype=torch.long)
-            val_loss = cross_entropy(model(x_val), y_val).item()
-            if wandb_run:
-                wandb_run.log(
-                    {
-                        "train_loss": train_loss,
-                        "val_loss": val_loss,
-                    },
-                    step=iteration,
-                )
+            model.eval()
+
+            with torch.inference_mode():
+                # recompute train loss after optim step.
+                train_loss = cross_entropy(model(x_train), y_train).item()
+
+                x_val, y_val = next(load_val)
+                x_val = x_val.to(device, dtype=torch.long)
+                y_val = y_val.to(device, dtype=torch.long)
+                val_loss = cross_entropy(model(x_val), y_val).item()
+
+                if wandb_run:
+                    wandb_run.log(
+                        {
+                            "train_loss": train_loss,
+                            "val_loss": val_loss,
+                        },
+                        step=iteration,
+                    )
+
+            model.train()
 
         if iteration % save_freq == 0:
-            # TODO: add full val set loss here.
+            # TODO: pass info to wandb
             save_checkpoint(
                 model, optim, iteration, out_dir / f"{iteration}.pt"
             )
 
     train_loss = loss.item()
-    x_val, y_val = next(load_val)
-    x_val = x_val.to(device, dtype=torch.long)
-    y_val = y_val.to(device, dtype=torch.long)
-    val_loss = cross_entropy(model(x_val), y_val).item()
+    x_train, y_train = next(load_val)
+    x_train = x_train.to(device, dtype=torch.long)
+    y_train = y_train.to(device, dtype=torch.long)
+    val_loss = cross_entropy(model(x_train), y_train).item()
     if wandb_run:
         wandb_run.log(
             {
