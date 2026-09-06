@@ -81,6 +81,7 @@ OPTIM_CONFIGS: dict[str, OptimizerConfig] = {
 @dataclass()
 class DatasetConfig:
     path: Path
+    seq_len: int
     shuffle: bool = True
 
 
@@ -123,6 +124,30 @@ class NextTokenDataset(torch.utils.data.Dataset):
     def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
         tokens = self.data[index]
         return tokens[:-1], tokens[1:]
+
+
+def make_dataloader(
+    dataset_config: DatasetConfig,
+    batch_size: int,
+    generator: torch.Generator | None = None,
+) -> torch.utils.data.DataLoader:
+
+    dataset = NextTokenDataset(
+        # first 'train' is the train config, second is the train set.
+        data=np.load(dataset_config.path, mmap_mode="c"),
+        context_length=dataset_config.seq_len,
+    )
+    sampler = (
+        torch.utils.data.RandomSampler(
+            dataset, replacement=True, generator=generator
+        )
+        if dataset_config.shuffle
+        else None
+    )
+
+    return torch.utils.data.DataLoader(
+        dataset, batch_size=batch_size, shuffle=False, sampler=sampler
+    )
 
 
 def model_from_config(config: ModelConfig) -> torch.nn.Module:

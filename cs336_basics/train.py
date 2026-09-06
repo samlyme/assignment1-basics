@@ -1,6 +1,5 @@
 from dataclasses import asdict
 from pathlib import Path
-import numpy as np
 import torch
 import wandb
 
@@ -11,9 +10,9 @@ from cs336_basics.utils import (
     MODEL_CONFIGS,
     OPTIM_CONFIGS,
     DatasetConfig,
-    NextTokenDataset,
     RunConfig,
     TrainConfig,
+    make_dataloader,
     model_from_config,
     load_checkpoint,
     optimizer_from_config,
@@ -45,31 +44,11 @@ def run_training(
     else:
         start_iter = 0
 
-    dataset_train = NextTokenDataset(
-        # first 'train' is the train config, second is the train set.
-        data=np.load(config.train.train.path, mmap_mode="c"),
-        context_length=config.model.context_length,
-    )
     load_train = iter(
-        torch.utils.data.DataLoader(
-            dataset_train,
-            batch_size=config.train.batch_size,
-            shuffle=config.train.train.shuffle,
-        )
+        make_dataloader(config.train.train, config.train.batch_size)
     )
 
-    dataset_val = NextTokenDataset(
-        # first 'train' is the train config, second is the train set.
-        data=np.load(config.train.val.path, mmap_mode="c"),
-        context_length=config.model.context_length,
-    )
-    load_val = iter(
-        torch.utils.data.DataLoader(
-            dataset_val,
-            batch_size=config.train.batch_size,
-            shuffle=config.train.val.shuffle,
-        )
-    )
+    load_val = iter(make_dataloader(config.train.val, config.train.batch_size))
 
     for iteration in range(start_iter, config.train.steps):
         x_train, y_train = next(load_train)
@@ -176,8 +155,8 @@ def parse_config(args: argparse.Namespace) -> RunConfig:
 
     context_length = model_config.context_length
     train_config = TrainConfig(
-        train=DatasetConfig(path=args.train),
-        val=DatasetConfig(path=args.val),
+        train=DatasetConfig(args.train, context_length, shuffle=True),
+        val=DatasetConfig(args.val, context_length, shuffle=True),
         batch_size=args.batch_size,
         steps=args.steps,
     )

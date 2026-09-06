@@ -131,8 +131,8 @@ for batch_size in batch_sizes:
     )
     train_configs.append(
         TrainConfig(
-            train=DatasetConfig(train_path),
-            val=DatasetConfig(valid_path),
+            train=DatasetConfig(train_path, model_config.context_length),
+            val=DatasetConfig(valid_path, model_config.context_length),
             batch_size=batch_size,
             steps=steps,
         )
@@ -230,8 +230,12 @@ add_pueue(
         model=model_config,
         optim=optim_config,
         train=TrainConfig(
-            train=DatasetConfig(train_path, shuffle=False),
-            val=DatasetConfig(valid_path, shuffle=False),
+            train=DatasetConfig(
+                train_path, model_config.context_length, shuffle=False
+            ),
+            val=DatasetConfig(
+                valid_path, model_config.context_length, shuffle=False
+            ),
             batch_size=32,
             steps=40_000,
         ),
