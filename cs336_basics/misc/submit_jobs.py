@@ -237,10 +237,10 @@ add_pueue(
                 valid_path, model_config.context_length, shuffle=False
             ),
             batch_size=32,
-            steps=40_000,
+            steps=1000,
         ),
     ),
-    "Training with no shuffle. Testing if I fixed leaky validation.",
+    "Test new dataloader util.",
 )
 
 # %%

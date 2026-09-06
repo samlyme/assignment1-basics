@@ -82,7 +82,7 @@ OPTIM_CONFIGS: dict[str, OptimizerConfig] = {
 class DatasetConfig:
     path: Path
     seq_len: int
-    shuffle: bool = True
+    random_sample: bool = True
 
 
 @dataclass(kw_only=True)
@@ -141,7 +141,7 @@ def make_dataloader(
         torch.utils.data.RandomSampler(
             dataset, replacement=True, generator=generator
         )
-        if dataset_config.shuffle
+        if dataset_config.random_sample
         else None
     )
 
