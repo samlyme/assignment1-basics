@@ -1,3 +1,5 @@
+from collections.abc import Iterable
+import itertools
 from pathlib import Path
 import torch
 import wandb
@@ -18,7 +20,8 @@ from cs336_basics.utils import (
 def run_training(
     config: RunConfig,
     out_dir: Path,
-    log_freq: int = 100,
+    log_train_freq: int = 100,
+    log_val_freq: int = 500,
     save_freq: int = 1000,
     checkpoint: Path | None = None,
     device: torch.types.Device = None,
@@ -38,16 +41,15 @@ def run_training(
     else:
         start_iter = 0
 
-    load_train = iter(
+    loader_train_iter = iter(
         make_dataloader(config.train.train, config.train.batch_size)
     )
 
-    # TODO: load an explicit 100 batch mini-val sample
-    # TODO: perform a full val set eval every save.
-    load_val = iter(make_dataloader(config.train.val, config.train.batch_size))
+    loader_val = make_dataloader(config.train.val, config.train.batch_size)
+    val_batches = list(itertools.islice(loader_val, 50))
 
     for iteration in range(start_iter, config.train.steps):
-        x_train, y_train = next(load_train)
+        x_train, y_train = next(loader_train_iter)
         x_train = x_train.to(device, dtype=torch.long)
         y_train = y_train.to(device, dtype=torch.long)
 
@@ -58,51 +60,70 @@ def run_training(
         optim.step()
         optim.zero_grad()
 
-        if iteration % log_freq == 0:
+        if iteration % log_train_freq == 0:
             model.eval()
 
             with torch.inference_mode():
                 # recompute train loss after optim step.
                 train_loss = cross_entropy(model(x_train), y_train).item()
 
-                x_val, y_val = next(load_val)
-                x_val = x_val.to(device, dtype=torch.long)
-                y_val = y_val.to(device, dtype=torch.long)
-                val_loss = cross_entropy(model(x_val), y_val).item()
-
                 if wandb_run:
-                    wandb_run.log(
-                        {
-                            "train_loss": train_loss,
-                            "val_loss": val_loss,
-                        },
-                        step=iteration,
-                    )
+                    wandb_run.log({"train_loss": train_loss}, step=iteration)
 
             model.train()
+
+        if iteration % log_val_freq == 0:
+            if wandb_run:
+                wandb_run.log(
+                    {"val_loss": evaluate_model(model, val_batches, device)},
+                    step=iteration,
+                )
 
         if iteration % save_freq == 0:
             # TODO: pass info to wandb
             save_checkpoint(
                 model, optim, iteration, out_dir / f"{iteration}.pt"
             )
+            if wandb_run:
+                wandb_run.log(
+                    {
+                        "val_loss_full": evaluate_model(
+                            model, loader_val, device
+                        )
+                    },
+                    step=iteration,
+                )
 
-    train_loss = loss.item()
-    x_train, y_train = next(load_val)
-    x_train = x_train.to(device, dtype=torch.long)
-    y_train = y_train.to(device, dtype=torch.long)
-    val_loss = cross_entropy(model(x_train), y_train).item()
+    save_checkpoint(model, optim, iteration, out_dir / f"{iteration}.pt")
     if wandb_run:
         wandb_run.log(
-            {
-                "train_loss": train_loss,
-                "val_loss": val_loss,
-            },
+            {"val_loss_full": evaluate_model(model, loader_val, device)},
             step=iteration,
         )
-    save_checkpoint(model, optim, iteration, out_dir / f"{iteration}-final.pt")
     if wandb_run:
         wandb_run.finish()
+
+
+def evaluate_model(
+    model: torch.nn.Module,
+    val_batches: Iterable[tuple[torch.Tensor, torch.Tensor]],
+    device: torch.types.Device = None,
+):
+    was_training = model.training
+    model.eval()
+
+    with torch.inference_mode():
+        val_loss_total = 0
+        num_batches = 0
+        for x_val, y_val in val_batches:
+            x_val = x_val.to(device, dtype=torch.long)
+            y_val = y_val.to(device, dtype=torch.long)
+            val_loss_total += cross_entropy(model(x_val), y_val).item()
+            num_batches += 1
+        val_loss = val_loss_total / num_batches
+
+    model.train(was_training)
+    return val_loss
 
 
 def main():
@@ -133,16 +154,18 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     print(f"Save models and logs to: {out_dir}")
 
-    LOG_FREQ = args.log_freq
-    SAVE_FREQ = config.train.steps // args.saves
+    log_loss_freq = args.log_freq
+    log_val_freq = 500
+    save_freq = config.train.steps // args.saves
 
     checkpoint: Path | None = args.checkpoint
 
     run_training(
         config,
         out_dir,
-        LOG_FREQ,
-        SAVE_FREQ,
+        log_loss_freq,
+        log_val_freq,
+        save_freq,
         checkpoint,
         device,
         run,
