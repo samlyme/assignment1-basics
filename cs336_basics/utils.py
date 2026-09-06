@@ -94,10 +94,6 @@ class RunConfig(BaseModel):
     train: TrainConfig
 
 
-def parse_run_config(str: str) -> RunConfig:
-    return RunConfig.model_validate_json(str)
-
-
 class NextTokenDataset(torch.utils.data.Dataset):
     def __init__(
         self,

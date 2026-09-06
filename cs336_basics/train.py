@@ -6,16 +6,11 @@ import argparse
 
 from cs336_basics.nn_utils import cross_entropy
 from cs336_basics.utils import (
-    MODEL_CONFIGS,
-    OPTIM_CONFIGS,
-    DatasetConfig,
     RunConfig,
-    TrainConfig,
     make_dataloader,
     model_from_config,
     load_checkpoint,
     optimizer_from_config,
-    parse_run_config,
     save_checkpoint,
 )
 
@@ -108,86 +103,13 @@ def run_training(
         wandb_run.finish()
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="Train a model")
-    parser.add_argument(
-        "--train",
-        type=Path,
-        help="Path to tokenized training data",
-    )
-    parser.add_argument(
-        "--val",
-        type=Path,
-        help="Path to tokenized validation data",
-    )
-
-    parser.add_argument("--model-config", type=str, default="toy")
-    parser.add_argument("--optim-config", type=str, default="slow")
-
-    parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--steps", type=int, default=40000)
-    parser.add_argument("--total-tokens", type=int)
-
-    parser.add_argument("--log-freq", type=int, default=100)
-    parser.add_argument("--saves", type=int, default=5)
-    parser.add_argument("--out-dir", type=Path)
-
-    parser.add_argument("--checkpoint", type=Path)
-
-    parser.add_argument("--device", type=str)
-
-    parser.add_argument("--config", type=str)
-
-    return parser.parse_args()
-
-
-def parse_config(args: argparse.Namespace) -> RunConfig:
-    model_config = MODEL_CONFIGS[args.model_config]
-    # model = model_from_config(model_config).to(device)
-    # model.compile()
-    # print(f"Model configs: {model_config}")
-
-    optim_config = OPTIM_CONFIGS[args.optim_config]
-    # optim = optimizer_from_config(model, optim_config)
-    # print(f"Optim configs: {optim_config}")
-
-    context_length = model_config.context_length
-    train_config = TrainConfig(
-        train=DatasetConfig(
-            path=args.train,
-            seq_len=context_length,
-            random_sample=True,
-        ),
-        val=DatasetConfig(
-            path=args.val,
-            seq_len=context_length,
-            random_sample=True,
-        ),
-        batch_size=args.batch_size,
-        steps=args.steps,
-    )
-    if args.total_tokens:
-        train_config.steps = args.total_tokens // (
-            train_config.batch_size * context_length
-        )
-
-    config = RunConfig(
-        model=model_config,
-        optim=optim_config,
-        train=train_config,
-    )
-
-    return config
-
-
 def main():
-    args = parse_args()
+    parser = argparse.ArgumentParser(description="Train a model")
+    parser.add_argument("--config", type=RunConfig.model_validate_json)
 
-    if args.config:
-        print("Overriding all other args with '--config'")
-        config = parse_run_config(args.config)
-    else:
-        config = parse_config(args)
+    args = parser.parse_args()
+
+    config = args.config
 
     if args.device:
         device = torch.device(args.device)
