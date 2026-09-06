@@ -32,6 +32,7 @@ def run_training(
     wandb_run: wandb.Run | None = None,
 ):
     out_dir.mkdir(parents=True, exist_ok=True)
+    torch.manual_seed(42)
 
     model = model_from_config(config.model).to(device)
     model.compile()
@@ -48,10 +49,9 @@ def run_training(
         data=np.load(config.train.train.path, mmap_mode="c"),
         context_length=config.model.context_length,
     )
-
     load_train = iter(
         torch.utils.data.DataLoader(
-            dataset_train, batch_size=config.train.batch_size
+            dataset_train, batch_size=config.train.batch_size, shuffle=True
         )
     )
 
@@ -60,10 +60,9 @@ def run_training(
         data=np.load(config.train.val.path, mmap_mode="c"),
         context_length=config.model.context_length,
     )
-
     load_val = iter(
         torch.utils.data.DataLoader(
-            dataset_val, batch_size=config.train.batch_size
+            dataset_val, batch_size=config.train.batch_size, shuffle=True
         )
     )
 
@@ -207,7 +206,7 @@ def main():
 
     run = wandb.init(
         entity="canofspam-cal-poly-pomona",
-        project="my-awesome-project",
+        project="cs336-a1",
         config=asdict(config),
     )
     if args.out_dir is None:
