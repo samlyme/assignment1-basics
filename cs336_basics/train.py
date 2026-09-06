@@ -106,23 +106,14 @@ def run_training(
 def main():
     parser = argparse.ArgumentParser(description="Train a model")
     parser.add_argument("--config", type=RunConfig.model_validate_json)
-
+    parser.add_argument("--device", type=torch.device, default="cuda")
     args = parser.parse_args()
 
-    config = args.config
+    config: RunConfig = args.config
 
-    if args.device:
-        device = torch.device(args.device)
-    elif torch.cuda.is_available():
-        device = torch.device("cuda")
-        # pytorch warning said this is good :D
+    device: torch.device = args.device
+    if device.type.find("cuda") != -1:
         torch.set_float32_matmul_precision("high")
-    elif torch.mps.is_available():
-        device = torch.device("mps")
-        # DO NOT USE `torch.set_float32_matmul_precision("high")` here.
-        # assignment claims this causes silent failures.
-    else:
-        device = torch.device("cpu")
 
     run = wandb.init(
         entity="canofspam-cal-poly-pomona",
