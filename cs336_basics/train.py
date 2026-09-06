@@ -137,7 +137,6 @@ def parse_args():
 
     parser.add_argument("--device", type=str)
 
-    # TODO: make the run config use pydantic models.
     parser.add_argument("--config", type=str)
 
     return parser.parse_args()
@@ -155,8 +154,16 @@ def parse_config(args: argparse.Namespace) -> RunConfig:
 
     context_length = model_config.context_length
     train_config = TrainConfig(
-        train=DatasetConfig(args.train, context_length, random_sample=True),
-        val=DatasetConfig(args.val, context_length, random_sample=True),
+        train=DatasetConfig(
+            path=args.train,
+            seq_len=context_length,
+            random_sample=True,
+        ),
+        val=DatasetConfig(
+            path=args.val,
+            seq_len=context_length,
+            random_sample=True,
+        ),
         batch_size=args.batch_size,
         steps=args.steps,
     )

@@ -8,13 +8,11 @@ import numpy as np
 import torch
 import numpy.typing as npt
 from cs336_basics.nn_utils import clip_gradient, cross_entropy
-from dataclasses import asdict, dataclass
 
-from pydantic import TypeAdapter
+from pydantic import BaseModel
 
 
-@dataclass(kw_only=True)
-class TransformerLMConfig:
+class TransformerLMConfig(BaseModel):
     vocab_size: int
     d_model: int
     num_layers: int
@@ -49,8 +47,7 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
 }
 
 
-@dataclass(kw_only=True)
-class AdamWConfig:
+class AdamWConfig(BaseModel):
     lr: float = 0.001
     betas: tuple[float, float] = (0.9, 0.999)
     eps: float = 1e-8
@@ -78,31 +75,27 @@ OPTIM_CONFIGS: dict[str, OptimizerConfig] = {
 }
 
 
-@dataclass()
-class DatasetConfig:
+class DatasetConfig(BaseModel):
     path: Path
     seq_len: int
     random_sample: bool = True
 
 
-@dataclass(kw_only=True)
-class TrainConfig:
+class TrainConfig(BaseModel):
     train: DatasetConfig
     val: DatasetConfig
     batch_size: int = 32
     steps: int = 40_000
 
 
-@dataclass(kw_only=True)
-class RunConfig:
+class RunConfig(BaseModel):
     model: ModelConfig
     optim: OptimizerConfig
     train: TrainConfig
 
 
 def parse_run_config(str: str) -> RunConfig:
-    adapter = TypeAdapter(RunConfig)
-    return adapter.validate_json(str)
+    return RunConfig.model_validate_json(str)
 
 
 class NextTokenDataset(torch.utils.data.Dataset):
@@ -153,7 +146,7 @@ def make_dataloader(
 def model_from_config(config: ModelConfig) -> torch.nn.Module:
     match config:
         case TransformerLMConfig():
-            return TransformerLM(**asdict(config))
+            return TransformerLM(**config.model_dump())
 
 
 def optimizer_from_config(
@@ -161,7 +154,7 @@ def optimizer_from_config(
 ) -> torch.optim.Optimizer:
     match config:
         case AdamWConfig():
-            return AdamW(model.parameters(), **asdict(config))
+            return AdamW(model.parameters(), **config.model_dump())
 
 
 def lr_sweep(
