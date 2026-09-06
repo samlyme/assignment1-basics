@@ -42,6 +42,8 @@ def run_training(
         make_dataloader(config.train.train, config.train.batch_size)
     )
 
+    # TODO: load an explicit 100 batch mini-val sample
+    # TODO: perform a full val set eval every save.
     load_val = iter(make_dataloader(config.train.val, config.train.batch_size))
 
     for iteration in range(start_iter, config.train.steps):
