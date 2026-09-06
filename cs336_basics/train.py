@@ -1,4 +1,3 @@
-from dataclasses import asdict
 from pathlib import Path
 import torch
 import wandb
@@ -206,7 +205,7 @@ def main():
     run = wandb.init(
         entity="canofspam-cal-poly-pomona",
         project="cs336-a1",
-        config=asdict(config),
+        config=config.model_dump(),
     )
     if args.out_dir is None:
         out_dir = Path(f"/data/models/{run.name}")
