@@ -121,7 +121,6 @@ def main():
     parser.add_argument("--config", type=RunConfig.model_validate_json)
     parser.add_argument("--device", type=torch.device, default="cuda")
 
-    parser.add_argument("--out-dir", type=Path)
     parser.add_argument("--log-freq", type=int, default=100)
     parser.add_argument("--saves", type=int, default=5)
 
@@ -134,32 +133,31 @@ def main():
     if device.type.find("cuda") != -1:
         torch.set_float32_matmul_precision("high")
 
-    run = wandb.init(
+    with wandb.init(
         entity="canofspam-cal-poly-pomona",
         project="cs336-a1",
         config=config.model_dump(),
-    )
-    if args.out_dir is None:
+    ) as run:
         out_dir = Path(f"/data/models/{run.name}")
-    out_dir.mkdir(parents=True, exist_ok=True)
-    print(f"Save models and logs to: {out_dir}")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        print(f"Save models and logs to: {out_dir}")
 
-    log_loss_freq = args.log_freq
-    log_val_freq = 500
-    save_freq = config.train.steps // args.saves
+        log_loss_freq = args.log_freq
+        log_val_freq = 500
+        save_freq = config.train.steps // args.saves
 
-    checkpoint: Path | None = args.checkpoint
+        checkpoint: Path | None = args.checkpoint
 
-    run_training(
-        config,
-        out_dir,
-        log_loss_freq,
-        log_val_freq,
-        save_freq,
-        checkpoint,
-        device,
-        run,
-    )
+        run_training(
+            config,
+            out_dir,
+            log_loss_freq,
+            log_val_freq,
+            save_freq,
+            checkpoint,
+            device,
+            run,
+        )
 
 
 if __name__ == "__main__":
