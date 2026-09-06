@@ -140,22 +140,23 @@ max_batch_size
 
 
 # %%
-def batch_sizes_up_to(max_batch_size: int) -> list[int]:
+def batch_sizes_range(lo: int, hi: int) -> list[int]:
     out: list[int] = []
 
     i = 1
-    while i < max_batch_size:
+    while i < hi:
         out.append(i)
         i *= 2
 
     return out
 
 
-batch_sizes = batch_sizes_up_to(max_batch_size)
+batch_sizes = batch_sizes_range(1, max_batch_size)
+batch_sizes.reverse()  # for my setup it is better to run large batch sizes first.
 
 # %%
-peak_mems = [sub(peak_mem).subs({batch_size: b}) for b in batch_sizes]
-
+{b: sub(peak_mem.subs({batch_size: b})) for b in batch_sizes}
+# when benchmarking, this estimate is consistently too low!
 # %%
 # Batch size experiment with fixed total tokens processed
 total_tokens_processed = 327_680_000
@@ -173,43 +174,43 @@ for batch_size in batch_sizes:
 train_configs
 
 # %%
-res = {}
-data = np.load(
-    "/data/tokenized/ts-valid-10k_ts.npy",
-    mmap_mode="c",
-)
-min_lr = 1e-5
-max_lr = 1e-2
-for batch_size in tqdm(batch_sizes):
-    model = model_from_config(model_config)
-    lr = min_lr
-    optimizer = AdamW(
-        model.parameters(), lr=lr, betas=(0.9, 0.999), weight_decay=0
-    )
+# res = {}
+# data = np.load(
+#     "/data/tokenized/ts-valid-10k_ts.npy",
+#     mmap_mode="c",
+# )
+# min_lr = 1e-5
+# max_lr = 1e-2
+# for batch_size in tqdm(batch_sizes):
+#     model = model_from_config(model_config)
+#     lr = min_lr
+#     optimizer = AdamW(
+#         model.parameters(), lr=lr, betas=(0.9, 0.999), weight_decay=0
+#     )
 
-    dataloader = torch.utils.data.DataLoader(
-        NextTokenDataset(data, model_config.context_length),
-        batch_size,
-        shuffle=True,
-    )
-    lrs, losses = lr_sweep(model, optimizer, dataloader, device="cuda")
+#     dataloader = torch.utils.data.DataLoader(
+#         NextTokenDataset(data, model_config.context_length),
+#         batch_size,
+#         shuffle=True,
+#     )
+#     lrs, losses = lr_sweep(model, optimizer, dataloader, device="cuda")
 
-    res[batch_size] = {"lrs": lrs, "losses": losses}
+#     res[batch_size] = {"lrs": lrs, "losses": losses}
 
-for batch_size, result in res.items():
-    plt.plot(
-        result["lrs"],
-        result["losses"],
-        label=f"BS={batch_size}",
-    )
+# for batch_size, result in res.items():
+#     plt.plot(
+#         result["lrs"],
+#         result["losses"],
+#         label=f"BS={batch_size}",
+#     )
 
-plt.xscale("log")
-plt.xlabel("Learning rate")
-plt.ylabel("Loss")
-plt.title("Learning Rate Sweep by Batch Size")
-plt.legend()
-plt.grid(True, alpha=0.3)
-plt.show()
+# plt.xscale("log")
+# plt.xlabel("Learning rate")
+# plt.ylabel("Loss")
+# plt.title("Learning Rate Sweep by Batch Size")
+# plt.legend()
+# plt.grid(True, alpha=0.3)
+# plt.show()
 # seems like 1.5e-4 is very stable, with 1e-3 being relatively aggro for all batch sizes.
 
 # %%
@@ -217,6 +218,7 @@ plt.show()
 # TODO: sweep scheduling.
 optim_config = OptimizerConfig(lr=1.5e-4)
 
+# %%
 for train_config in train_configs:
     config = RunConfig(
         model=model_config,
@@ -224,3 +226,26 @@ for train_config in train_configs:
         train=train_config,
     )
     submit_pueue(config)
+
+# %%
+train_config_shuffle = TrainConfig(
+    train=DatasetConfig(train_path, shuffle=True),
+    val=DatasetConfig(valid_path, shuffle=True),
+    batch_size=128,
+    steps=10000,
+)
+
+train_config_no_shuffle = TrainConfig(
+    train=DatasetConfig(train_path, shuffle=False),
+    val=DatasetConfig(valid_path, shuffle=False),
+    batch_size=128,
+    steps=10000,
+)
+for train_config in (train_config_no_shuffle, train_config_shuffle):
+    submit_pueue(
+        RunConfig(
+            model=model_config,
+            optim=optim_config,
+            train=train_config,
+        )
+    )
