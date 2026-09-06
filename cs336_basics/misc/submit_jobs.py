@@ -1,5 +1,4 @@
 # %%
-from dataclasses import asdict
 import json
 from pathlib import Path
 import shlex
@@ -28,7 +27,7 @@ from tqdm import tqdm
 train_path = Path("/data/tokenized/ts-train-10k_ts.npy")
 valid_path = Path("/data/tokenized/ts-valid-10k_ts.npy")
 model_config = MODEL_CONFIGS["toy"]
-model_config_dict = asdict(model_config)
+model_config_dict = model_config.model_dump()
 keys = list(model_config_dict.keys())
 model_symbols = sp.symbols(keys)
 
@@ -131,8 +130,12 @@ for batch_size in batch_sizes:
     )
     train_configs.append(
         TrainConfig(
-            train=DatasetConfig(train_path, model_config.context_length),
-            val=DatasetConfig(valid_path, model_config.context_length),
+            train=DatasetConfig(
+                path=train_path, seq_len=model_config.context_length
+            ),
+            val=DatasetConfig(
+                path=valid_path, seq_len=model_config.context_length
+            ),
             batch_size=batch_size,
             steps=steps,
         )
@@ -197,7 +200,7 @@ def add_pueue(config: RunConfig, desc: str | None = None) -> None:
             f"Object of type {type(value)} is not JSON serializable"
         )
 
-    payload = json.dumps(asdict(config), default=handle_path)
+    payload = json.dumps(config.model_dump(), default=handle_path)
 
     command = shlex.join(
         [
@@ -231,10 +234,14 @@ add_pueue(
         optim=optim_config,
         train=TrainConfig(
             train=DatasetConfig(
-                train_path, model_config.context_length, shuffle=False
+                path=train_path,
+                seq_len=model_config.context_length,
+                random_sample=True,
             ),
             val=DatasetConfig(
-                valid_path, model_config.context_length, shuffle=False
+                path=valid_path,
+                seq_len=model_config.context_length,
+                random_sample=True,
             ),
             batch_size=32,
             steps=1000,
