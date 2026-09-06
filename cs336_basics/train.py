@@ -88,22 +88,8 @@ def run_training(
             save_checkpoint(
                 model, optim, iteration, out_dir / f"{iteration}.pt"
             )
-            if wandb_run:
-                wandb_run.log(
-                    {
-                        "val_loss_full": evaluate_model(
-                            model, loader_val, device
-                        )
-                    },
-                    step=iteration,
-                )
 
     save_checkpoint(model, optim, iteration, out_dir / f"{iteration}.pt")
-    if wandb_run:
-        wandb_run.log(
-            {"val_loss_full": evaluate_model(model, loader_val, device)},
-            step=iteration,
-        )
     if wandb_run:
         wandb_run.finish()
 

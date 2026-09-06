@@ -116,7 +116,7 @@ def batch_sizes_range(lo: int, hi: int) -> list[int]:
     return out
 
 
-batch_sizes = batch_sizes_range(1, max_batch_size)
+batch_sizes = batch_sizes_range(8, max_batch_size)
 batch_sizes.reverse()  # for my setup it is better to run large batch sizes first.
 {b: subs_model(peak_mem.subs({batch_size: b})) for b in batch_sizes}
 
@@ -247,7 +247,7 @@ add_pueue(
             steps=1000,
         ),
     ),
-    "Test new dataloader util.",
+    "Test",
 )
 
 # %%
