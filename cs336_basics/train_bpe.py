@@ -150,8 +150,6 @@ def update_token_pair_from(
         token_pair_from[pair].update(pretoken_ids)
 
 
-# TODO: make this use ID's internally. Then use a global delta-based approach
-# for the pair counts.
 def train_bpe(
     input_path: str | os.PathLike,
     vocab_size: int,
