@@ -81,6 +81,7 @@ OPTIM_CONFIGS: dict[str, OptimizerConfig] = {
 @dataclass()
 class DatasetConfig:
     path: Path
+    shuffle: bool = True
 
 
 @dataclass(kw_only=True)

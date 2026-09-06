@@ -51,7 +51,9 @@ def run_training(
     )
     load_train = iter(
         torch.utils.data.DataLoader(
-            dataset_train, batch_size=config.train.batch_size, shuffle=True
+            dataset_train,
+            batch_size=config.train.batch_size,
+            shuffle=config.train.train.shuffle,
         )
     )
 
@@ -62,7 +64,9 @@ def run_training(
     )
     load_val = iter(
         torch.utils.data.DataLoader(
-            dataset_val, batch_size=config.train.batch_size, shuffle=True
+            dataset_val,
+            batch_size=config.train.batch_size,
+            shuffle=config.train.val.shuffle,
         )
     )
 
