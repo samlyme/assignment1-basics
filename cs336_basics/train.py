@@ -46,7 +46,11 @@ def run_training(
     )
 
     loader_val = make_dataloader(config.train.val, config.train.batch_size)
-    val_batches = list(itertools.islice(loader_val, 50))
+    # we want to take ~100k tokens to evaluate.
+    num_val_batches = int(
+        100_000 / config.train.batch_size / config.model.context_length
+    )
+    val_batches = list(itertools.islice(loader_val, num_val_batches))
 
     for iteration in range(start_iter, config.train.steps):
         x_train, y_train = next(loader_train_iter)
@@ -61,16 +65,16 @@ def run_training(
         optim.zero_grad()
 
         if iteration % log_train_freq == 0:
-            model.eval()
-
-            with torch.inference_mode():
-                # recompute train loss after optim step.
-                train_loss = cross_entropy(model(x_train), y_train).item()
-
-                if wandb_run:
-                    wandb_run.log({"train_loss": train_loss}, step=iteration)
-
-            model.train()
+            # recompute train loss after optim step.
+            if wandb_run:
+                wandb_run.log(
+                    {
+                        "train_loss": evaluate_model(
+                            model, [(x_train, y_train)], device
+                        )
+                    },
+                    step=iteration,
+                )
 
         if iteration % log_val_freq == 0:
             if wandb_run:
